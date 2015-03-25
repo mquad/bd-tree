@@ -5,6 +5,8 @@
 #include <utility>
 #include <vector>
 #include <limits>
+#include <iostream>
+#include <memory>
 
 struct BDIndex{
     using key_t = std::size_t;
@@ -19,11 +21,20 @@ struct BDIndex{
 
     // add a new score to the index
     void add_score(const key_t key, const score_t &score){
-        if(key > _index.size())
-            _index.push_back(entry_t());
+        while(key + 1 > _index.size())_index.push_back(entry_t());
         _index[key].push_back(score);
     }
 
+    void all_sums(const std::vector<key_t> keys, std::vector<int> &sum, std::vector<int> &sum2, std::vector<int> &counts){
+        // compute the sum, squared sum and count of scores for the given keys
+        for(const auto user_idx : keys){
+            for(auto score : _index[user_idx]){
+                sum[score.first] += score.second;
+                sum2[score.first] += score.second*score.second;
+                counts[score.first]++;
+            }
+        }
+    }
 
 };
 
@@ -59,7 +70,7 @@ struct BDTree{
     std::size_t _n_items;
 
     // builds the item and user indices given the training data
-    void init(std::vector<rating_tuple> training_data){
+    void init(const std::vector<rating_tuple> &training_data){
         for(const auto &rat : training_data){
             _item_index.add_score(std::get<1>(rat), BDIndex::score_t(std::get<0>(rat), std::get<2>(rat)));
             _user_index.add_score(std::get<0>(rat), BDIndex::score_t(std::get<1>(rat), std::get<2>(rat)));
@@ -72,28 +83,24 @@ struct BDTree{
         sum.assign(_n_items, 0);
         sum2.assign(_n_items, 0);
         counts.assign(_n_items, 0);
-        // compute the sum, squared sum and count of ratings given by users of the current node to each item
-        for(const auto user_idx : node->_users){
-            for(auto score : _user_index[user_idx]){
-                sum[score.first] += score.second;
-                sum2[score.first] += score.second*score.second;
-                counts[score.first]++;
-            }
-        }
+        _user_index.all_sums(node->_users, sum, sum2, counts);
+
         // compute the squared error of the node
         double err2{};
-        for(std::size_t item_idx{}; item_idx < _n_items; ++item_idx)
-            err2 += static_cast<double>(sum2[item_idx]) -
-                    static_cast<double>(sum[item_idx]*sum[item_idx]) / counts[item_idx];
+        for(std::size_t item_idx{}; item_idx < _n_items; ++item_idx){
+            if(counts[item_idx] > 0)
+                err2 += static_cast<double>(sum2[item_idx]) -
+                        static_cast<double>(sum[item_idx]*sum[item_idx]) / counts[item_idx];
+        }
         return err2;
     }
 
     // computes the squared error for a candidate splitter
-    double candidate_error(const BDNode_cptr node,
+    double splitting_error(const BDNode_cptr node,
+                           const BDIndex::key_t candidate,
                            const std::vector<int> &sum,
                            const std::vector<int> &sum2,
                            const std::vector<int> &counts,
-                           const BDIndex::key_t candidate,
                            std::vector<std::vector<BDIndex::key_t>> &groups){
 
         std::vector<int> lsum(_n_items, 0), lsum2(_n_items, 0), lcounts(_n_items, 0);
@@ -109,8 +116,27 @@ struct BDTree{
                 groups[1].push_back(it_score->first);
             }
         }
-
-        return 0.0;
+        // compute lovers and haters rating sums, squared sums and counts
+        _user_index.all_sums(groups[0], lsum, lsum2, lcounts);
+        _user_index.all_sums(groups[1], hsum, hsum2, hcounts);
+        // compute the candidate split squared error
+        double err2{};
+        for(std::size_t item_idx{}; item_idx < _n_items; item_idx++){
+            if(lcounts[item_idx] > 0)   // squared error on lovers
+                err2 += static_cast<double>(lsum2[item_idx]) -
+                        static_cast<double>(lsum[item_idx] * lsum[item_idx]) / lcounts[item_idx];
+            if(hcounts[item_idx] > 0)   // squared error on haters
+                err2 += static_cast<double>(hsum2[item_idx]) -
+                        static_cast<double>(hsum[item_idx] * hsum[item_idx]) / hcounts[item_idx];
+            int ucount = counts[item_idx] - lcounts[item_idx] - hcounts[item_idx];
+            if(ucount > 0){ // squared error on unknowns
+                int usum = sum[item_idx] - lsum[item_idx] - hsum[item_idx];
+                int usum2 = sum2[item_idx] - lsum2[item_idx] - hsum2[item_idx];
+                err2 += static_cast<double>(usum2) -
+                        static_cast<double>(usum * usum) / ucount;
+            }
+        }
+        return err2;
     }
 
     void gdt_r(BDNode_ptr root, const unsigned depth_max, const std::size_t alpha){
@@ -122,17 +148,19 @@ struct BDTree{
         std::vector<int> sum, sum2, counts;
         root->_error2 = node_error2(root, sum, sum2, counts);
 
-        BDIndex::key_t splitter{};
-        std::vector<BDIndex::key_t> groups[3];
+        // lovers and haters groups
+        // unknowns is implicitly determined by these two groups and the set of items associate to the node, so we don't store it explicitly
+        std::vector<BDIndex::key_t> groups[2];
         double min_err = std::numeric_limits<double>::max();
-        // compute the candidate item with the lowest error
+
+        // search for the item with the lowest splitting error
         for(BDIndex::key_t candidate{}; candidate < _n_items; ++candidate){
             std::vector<std::vector<BDIndex::key_t>> c_groups;
-            double c_err = candidate_error(root, candidate, c_groups);
-            if(c_err < min_err){
-                splitter = candidate;
-                min_err = c_err;
-                for(unsigned gidx{}; gidx < 3; ++gidx)
+            double split_err = splitting_error(root, candidate, sum, sum2, counts, c_groups);
+            if(split_err < min_err){
+                root->_splitter = candidate;
+                min_err = split_err;
+                for(unsigned gidx{}; gidx < 2; ++gidx)
                     groups[gidx].swap(c_groups[gidx]);
             }
         }

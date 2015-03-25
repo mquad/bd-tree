@@ -1,14 +1,29 @@
-project(bootstrap-trees)
+project(bd-tree)
 cmake_minimum_required(VERSION 2.8)
-aux_source_directory(./src SRC_LIST)
+
+# Import and build Google Test
+include(ExternalProject)
+set_directory_properties(properties EP_PREFIX "${CMAKE_BINARY_DIR}/third_party")
+ExternalProject_Add(googletest
+    URL "https://googletest.googlecode.com/files/gtest-1.7.0.zip"
+    SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/gtest"
+    INSTALL_COMMAND "")
+ExternalProject_Get_Property(googletest source_dir)
+include_directories(${source_dir}/include)
+ExternalProject_Get_Property(googletest binary_dir)
+link_directories(${binary_dir})
+
 
 #configure the compiler
 set (CMAKE_CXX_COMPILER "g++")
-set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -Werror -pedantic")
-set (CMAKE_CXX_FLAGS_DEBUG "-O0 -g -pg") # enable gprof during compilation
+set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -pedantic -fopenmp -openmp")
+set (CMAKE_CXX_FLAGS_DEBUG "-O0 -g ")
 set (CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
-set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -march=native -DNDEBUG")
-set (CMAKE_EXE_LINKER_FLAGS_DEBUG "-pg") # enable gprof during linking
 
 #add subdirectories
-add_subdirectory(src)       #directory for application sources
+add_subdirectory(src)       #application sources
+add_subdirectory(test)      #tests
+
+#add test target (make test)
+enable_testing()
+add_test(NAME BDTreeTest COMMAND bd_tree_test)
