@@ -4,14 +4,19 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <map>
 #include <limits>
 #include <iostream>
 #include <memory>
+#include <cassert>
 
+using stats_t = std::map<std::size_t, std::tuple<int, int, int>>;
 struct BDIndex{
     using key_t = std::size_t;
     using score_t = std::pair<key_t, int>;
     using entry_t = std::vector<score_t>;
+    using bounds_t = std::vector<std::pair<std::size_t, BDIndex::key_t>>;
+
     std::vector<entry_t> _index;
 
     // accessors for some basic properties
@@ -25,17 +30,32 @@ struct BDIndex{
         _index[key].push_back(score);
     }
 
-    void all_sums(const std::vector<key_t> keys, std::vector<int> &sum, std::vector<int> &sum2, std::vector<int> &counts){
-        // compute the sum, squared sum and count of scores for the given keys
-        for(const auto user_idx : keys){
-            for(auto score : _index[user_idx]){
-                sum[score.first] += score.second;
-                sum2[score.first] += score.second*score.second;
-                counts[score.first]++;
+    // returns the sum, squared sum and count of ratings for each entry between the specified bounds
+    stats_t compute_stats(const bounds_t &bounds){
+        assert(_index.size() == bounds.size());
+        stats_t stats;
+        for(std::size_t entry_idx{}; entry_idx < _index.size(); ++entry_idx){
+            auto it_left = _index[entry_idx].cbegin() + bounds[entry_idx].first;
+            auto it_right = _index[entry_idx].cbegin() + bounds[entry_idx].second;
+            for(auto it_score = it_left; it_score != it_right; ++it_score){
+                auto &s = stats[entry_idx];
+                std::get<0> (s) += it_score->second;
+                std::get<1> (s) += it_score->second * it_score->second;
+                ++std::get<2> (s);
             }
         }
+        return stats;
     }
 
+    // updates the stats with all the values associated to a given key
+    void update_stats(stats_t &stats, const key_t key){
+        for(const auto &score : _index[key]){
+            auto &s = stats[score.first];
+            std::get<0> (s) += score.second;
+            std::get<1> (s) += score.second * score.second;
+            ++std::get<2> (s);
+        }
+    }
 };
 
 struct BDTree{
@@ -45,27 +65,28 @@ struct BDTree{
         double _error2;
         unsigned _depth;
         std::size_t _num_ratings;
-        std::vector<BDIndex::key_t> _users;
+        stats_t _stats;
         // pointer to node's parent for hierarchial smoothing
         BDNode * _parent;
         // according to (Golbandi, 2011) descendants of the current node
         // are mapped to the users that either loved, hated or do not known
         // the splitter item. Thus, each node has 3 descendants, corresponding to
         // a partitioning of the set of users associated to it
-        BDNode* _children[3];
+        std::unique_ptr<BDNode> _children[3];
         // instead of duplicating the user set for each split, each node keeps only
         // the [left, right) boundaries of the users that are associated to it for each row of the
         // item_index
-        std::vector<std::pair<BDIndex::key_t, BDIndex::key_t>> _bounds;
+        BDIndex::bounds_t _bounds;
 
     };
     using BDNode_ptr = BDNode*;
     using BDNode_cptr = BDNode const*;
-
     using rating_tuple = std::tuple<std::size_t, std::size_t, int>;
+    using group_t = std::vector<BDIndex::key_t>;
+
     BDIndex _item_index;
     BDIndex _user_index;
-    BDNode_ptr _root;
+    std::shared_ptr<BDNode> _root;
     std::size_t _n_users;
     std::size_t _n_items;
 
@@ -77,106 +98,119 @@ struct BDTree{
         }
         _n_items = _item_index.size();
         _n_users = _user_index.size();
+        // initialize the root of the tree
+        _root = std::unique_ptr<BDNode>(new BDNode);
+        _root->_depth = 0u;
+        _root->_num_ratings = training_data.size();
+        _root->_parent = nullptr;
+        // set root node's bounds
+        for(const auto &entry : _item_index._index)
+            _root->_bounds.push_back({0, entry.size()});
     }
 
-    double node_error2(const BDNode_cptr node, std::vector<int> &sum, std::vector<int> &sum2, std::vector<int> &counts){
-        sum.assign(_n_items, 0);
-        sum2.assign(_n_items, 0);
-        counts.assign(_n_items, 0);
-        _user_index.all_sums(node->_users, sum, sum2, counts);
-
-        // compute the squared error of the node
+    // computes the squared error given node's statistics
+    double error2(const stats_t &stats){
         double err2{};
-        for(std::size_t item_idx{}; item_idx < _n_items; ++item_idx){
-            if(counts[item_idx] > 0)
-                err2 += static_cast<double>(sum2[item_idx]) -
-                        static_cast<double>(sum[item_idx]*sum[item_idx]) / counts[item_idx];
+        for(const auto &s : stats)
+            err2 += static_cast<double>(std::get<1> (s.second)) -
+                    static_cast<double>(std::get<0> (s.second) * std::get<0> (s.second)) / std::get<2> (s.second);
+        return err2;
+    }
+
+    // computes the error for the unknowns given the stats from loved and hated
+    double unknown_error2(const stats_t &node_stats, const std::vector<stats_t> &group_stats){
+        double err2{};
+        // initialize the pointers to the current element for each stats
+        std::vector<stats_t::const_iterator> it_current;
+        it_current.push_back(node_stats.cbegin());
+        for(const auto &s : group_stats)
+            it_current.push_back(s.cbegin());
+        // pass over all the stats simultaneously and update the squared error
+        while(it_current[0] != node_stats.cend()){
+            // retrieve current node's stats
+            const auto &item = it_current[0]->first;
+            const auto &item_stats = it_current[0]->second;
+            int sum = std::get<0> (item_stats);
+            int sum2 = std::get<1> (item_stats);
+            int n = std::get<2> (item_stats);
+            // subtract groups' stats to get the value for the unknowns
+            // note: iterators for groups start from 1 in it_current vector
+            for(std::size_t gidx{1}; gidx <= group_stats.size(); ++gidx){
+                if(it_current[gidx]->first == item){
+                    const auto &g_item_stats = it_current[gidx]->second;
+                    sum -= std::get<0> (g_item_stats);
+                    sum2 -= std::get<1> (g_item_stats);
+                    n -= std::get<2> (g_item_stats);
+                    ++it_current[gidx];
+                }
+            }
+            // update the squared error
+            if(n > 0)   err2 += static_cast<double>(sum2) - static_cast<double>(sum * sum) / n;
+            ++it_current[0];
         }
         return err2;
     }
 
-    // computes the squared error for a candidate splitter
     double splitting_error(const BDNode_cptr node,
                            const BDIndex::key_t candidate,
-                           const std::vector<int> &sum,
-                           const std::vector<int> &sum2,
-                           const std::vector<int> &counts,
-                           std::vector<std::vector<BDIndex::key_t>> &groups){
+                           std::vector<group_t> &groups,
+                           std::vector<stats_t> &group_stats){
+        auto it_left = _item_index[candidate].cbegin() + node->_bounds[candidate].first;
+        auto it_right = _item_index[candidate].cbegin() + node->_bounds[candidate].second;
 
-        std::vector<int> lsum(_n_items, 0), lsum2(_n_items, 0), lcounts(_n_items, 0);
-        std::vector<int> hsum(_n_items, 0), hsum2(_n_items, 0), hcounts(_n_items, 0);
-
-        auto left_bound = _item_index[candidate].cbegin() + node->_bounds[candidate].first;
-        auto right_bound = _item_index[candidate].cbegin() + node->_bounds[candidate].second;
-
-        for(auto it_score = left_bound; it_score < right_bound && it_score < _item_index[candidate].cend(); ++it_score){
-            if(it_score->second >= 4){ //loved item
+        for(auto it_score = it_left; it_score < it_right; ++it_score){
+            if(it_score->second >= 4){  // loved item
                 groups[0].push_back(it_score->first);
-            }else{ //hated item
+                _user_index.update_stats(group_stats[0], it_score->first);
+            }else{  // hated item
                 groups[1].push_back(it_score->first);
+                _user_index.update_stats(group_stats[1], it_score->first);
             }
         }
-        // compute lovers and haters rating sums, squared sums and counts
-        _user_index.all_sums(groups[0], lsum, lsum2, lcounts);
-        _user_index.all_sums(groups[1], hsum, hsum2, hcounts);
-        // compute the candidate split squared error
-        double err2{};
-        for(std::size_t item_idx{}; item_idx < _n_items; item_idx++){
-            if(lcounts[item_idx] > 0)   // squared error on lovers
-                err2 += static_cast<double>(lsum2[item_idx]) -
-                        static_cast<double>(lsum[item_idx] * lsum[item_idx]) / lcounts[item_idx];
-            if(hcounts[item_idx] > 0)   // squared error on haters
-                err2 += static_cast<double>(hsum2[item_idx]) -
-                        static_cast<double>(hsum[item_idx] * hsum[item_idx]) / hcounts[item_idx];
-            int ucount = counts[item_idx] - lcounts[item_idx] - hcounts[item_idx];
-            if(ucount > 0){ // squared error on unknowns
-                int usum = sum[item_idx] - lsum[item_idx] - hsum[item_idx];
-                int usum2 = sum2[item_idx] - lsum2[item_idx] - hsum2[item_idx];
-                err2 += static_cast<double>(usum2) -
-                        static_cast<double>(usum * usum) / ucount;
-            }
-        }
-        return err2;
+        double split_err2{};
+        split_err2 += error2(group_stats[0]);   // loved error
+        split_err2 += error2(group_stats[1]);   // hated error
+        split_err2 += unknown_error2(node->_stats, group_stats);    // unknowns error
+        return split_err2;
     }
 
-    void gdt_r(BDNode_ptr root, const unsigned depth_max, const std::size_t alpha){
+    void gdt_r(BDNode_ptr node, const unsigned depth_max, const std::size_t alpha){
         // check termination conditions on node's depth and number of ratings
-        if(root->_depth + 1 == depth_max || root->_num_ratings < alpha)
+        if(node->_depth + 1 == depth_max || node->_num_ratings < alpha)
             return;
-
-        // compute current node's squared error
-        std::vector<int> sum, sum2, counts;
-        root->_error2 = node_error2(root, sum, sum2, counts);
+        // compute statistics and squared error only for the root node
+        // descendant nodes will receive their statitistics and squared errors from their respective parents
+        if(node->_depth == 0){
+            node->_stats = _item_index.compute_stats(node->_bounds);
+            node->_error2 = error2(node->_stats);
+        }
 
         // lovers and haters groups
         // unknowns is implicitly determined by these two groups and the set of items associate to the node, so we don't store it explicitly
-        std::vector<BDIndex::key_t> groups[2];
+        std::vector<group_t> groups(2);
+        std::vector<stats_t> stats(2);
         double min_err = std::numeric_limits<double>::max();
 
         // search for the item with the lowest splitting error
         for(BDIndex::key_t candidate{}; candidate < _n_items; ++candidate){
-            std::vector<std::vector<BDIndex::key_t>> c_groups;
-            double split_err = splitting_error(root, candidate, sum, sum2, counts, c_groups);
+            std::vector<group_t> c_groups;
+            std::vector<stats_t> c_stats;
+            double split_err = splitting_error(node, candidate, c_groups, c_stats);
             if(split_err < min_err){
-                root->_splitter = candidate;
+                node->_splitter = candidate;
                 min_err = split_err;
                 for(unsigned gidx{}; gidx < 2; ++gidx)
                     groups[gidx].swap(c_groups[gidx]);
             }
         }
         // check termination condition on error reduction
-        if(min_err > root->_error2)  return;
+        if(min_err > node->_error2)  return;
         // generate children
     }
 
     void build(const unsigned depth_max, const std::size_t alpha){
-        // initialize the root of the tree
-        _root = new BDNode;
-        _root->_depth = 0u;
-        _root->_parent = nullptr;
-        _root->_bounds = std::vector<std::pair<BDIndex::key_t, BDIndex::key_t>>(_item_index.size(), {BDIndex::key_t{0}, std::numeric_limits<BDIndex::key_t>::max()});
         // recursively generate the decision tree
-        gdt_r(_root, depth_max, alpha);
+        gdt_r(_root.get(), depth_max, alpha);
     }
 };
 

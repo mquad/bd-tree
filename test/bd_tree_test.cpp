@@ -82,49 +82,52 @@ TEST(BDTreeTest, IndexTest){
 }
 
 TEST(BDTreeTest, TreeTest){
-    size_t n_users{11}, n_items{7};
     auto training_data = make_training_data();
     BDTree bdtree;
     bdtree.init(training_data);
 
     //check sums and counts
-    bdtree._root = new BDTree::BDNode();
-    bdtree._root->_users.push_back(1);
-    bdtree._root->_users.push_back(7);
-    bdtree._root->_users.push_back(9);
+    auto stats = bdtree._item_index.compute_stats(bdtree._root->_bounds);
 
-    std::vector<int> sum(n_items, 0), sum2(n_items, 0), counts(n_items, 0);
-    double node_err = bdtree.node_error2(bdtree._root, sum, sum2, counts);
+    EXPECT_EQ(14, std::get<0> (stats[0]));
+    EXPECT_EQ(13, std::get<0> (stats[1]));
+    EXPECT_EQ(10, std::get<0> (stats[2]));
+    EXPECT_EQ(13, std::get<0> (stats[3]));
+    EXPECT_EQ(6, std::get<0> (stats[4]));
+    EXPECT_EQ(6, std::get<0> (stats[5]));
+    EXPECT_EQ(14, std::get<0> (stats[6]));
 
-    ASSERT_EQ(0, sum[0]);
-    ASSERT_EQ(7, sum[1]);
-    ASSERT_EQ(5, sum[2]);
-    ASSERT_EQ(4, sum[3]);
-    ASSERT_EQ(0, sum[4]);
-    ASSERT_EQ(0, sum[5]);
-    ASSERT_EQ(4, sum[6]);
+    EXPECT_EQ(66, std::get<1> (stats[0]));
+    EXPECT_EQ(51, std::get<1> (stats[1]));
+    EXPECT_EQ(38, std::get<1> (stats[2]));
+    EXPECT_EQ(47, std::get<1> (stats[3]));
+    EXPECT_EQ(20, std::get<1> (stats[4]));
+    EXPECT_EQ(26, std::get<1> (stats[5]));
+    EXPECT_EQ(58, std::get<1> (stats[6]));
 
-    ASSERT_EQ(0, sum2[0]);
-    ASSERT_EQ(25, sum2[1]);
-    ASSERT_EQ(13, sum2[2]);
-    ASSERT_EQ(6, sum2[3]);
-    ASSERT_EQ(0, sum2[4]);
-    ASSERT_EQ(0, sum2[5]);
-    ASSERT_EQ(16, sum2[6]);
-
-    ASSERT_EQ(0, counts[0]);
-    ASSERT_EQ(2, counts[1]);
-    ASSERT_EQ(2, counts[2]);
-    ASSERT_EQ(3, counts[3]);
-    ASSERT_EQ(0, counts[4]);
-    ASSERT_EQ(0, counts[5]);
-    ASSERT_EQ(1, counts[6]);
+    EXPECT_EQ(3, std::get<2> (stats[0]));
+    EXPECT_EQ(4, std::get<2> (stats[1]));
+    EXPECT_EQ(3, std::get<2> (stats[2]));
+    EXPECT_EQ(5, std::get<2> (stats[3]));
+    EXPECT_EQ(2, std::get<2> (stats[4]));
+    EXPECT_EQ(2, std::get<2> (stats[5]));
+    EXPECT_EQ(4, std::get<2> (stats[6]));
 
     //check node properties
+    bdtree._root->_stats = stats;
+    double node_err = bdtree.error2(stats);
     double eps = 1e-9;
-    double true_err = (25.0 - 7.0*7.0/2) +
-            (13.0 - 5.0*5.0/2) + (6.0 - 4.0*4.0/3) + (16.0 - 4.0*4.0/1);
-    ASSERT_TRUE(std::abs(node_err - true_err) < eps);
+    double true_err = 306 - (196./3 + 169./4 + 100./3 + 169./5 + 36./2 + 36./2 + 196./4);
 
+    EXPECT_TRUE(std::abs(node_err - true_err) < eps);
+
+    //check splitting error
+    std::vector<BDTree::group_t> groups(2);
+    std::vector<stats_t> g_stats(2);
+    double split_err = bdtree.splitting_error(bdtree._root.get(), 1, groups, g_stats);
+    double split_err_true = 33.667;
+
+    EXPECT_EQ(split_err_true, split_err);
+    EXPECT_TRUE(std::abs(split_err - split_err_true) < 1e-3);
 
 }
