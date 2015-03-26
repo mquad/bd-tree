@@ -130,6 +130,27 @@ TEST(BDTreeTest, ErrorTest){
     EXPECT_TRUE(std::abs(split_err - split_err_true) < 1e-3);
 }
 
+TEST(BDTreeTest, SortingTest){
+    auto training_data = make_training_data();
+    BDTree bdtree;
+    bdtree.init(training_data);
+    std::vector<BDTree::group_t> groups{{0,4}, {1,7,9}};
+    auto item_3_entry = bdtree._item_index[3];
+    auto prev_size = item_3_entry.size();
+    auto bounds = bdtree.sort_by_group(item_3_entry.begin(),
+            item_3_entry.end(),
+            groups);
+    EXPECT_EQ(prev_size, item_3_entry.size());
+    EXPECT_EQ(BDIndex::score_t(0,5), item_3_entry[0]);
+    EXPECT_EQ(BDIndex::score_t(4,4), item_3_entry[1]);
+    EXPECT_EQ(BDIndex::score_t(1,1), item_3_entry[2]);
+    EXPECT_EQ(BDIndex::score_t(7,2), item_3_entry[3]);
+    EXPECT_EQ(BDIndex::score_t(9,1), item_3_entry[4]);
+
+    EXPECT_EQ(BDIndex::bound_t(0,2), bounds[0]);
+    EXPECT_EQ(BDIndex::bound_t(2,5), bounds[1]);
+    EXPECT_EQ(BDIndex::bound_t(5,5), bounds[2]);
+}
 
 TEST(BDTreeTest, BuildTest){
     auto training_data = make_training_data();
