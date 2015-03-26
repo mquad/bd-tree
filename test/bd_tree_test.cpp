@@ -81,7 +81,7 @@ TEST(BDTreeTest, IndexTest){
     ASSERT_EQ(BDIndex::score_t(0, 5), bdtree._user_index[10][0]);
 }
 
-TEST(BDTreeTest, TreeTest){
+TEST(BDTreeTest, ErrorTest){
     auto training_data = make_training_data();
     BDTree bdtree;
     bdtree.init(training_data);
@@ -127,7 +127,15 @@ TEST(BDTreeTest, TreeTest){
     double split_err = bdtree.splitting_error(bdtree._root.get(), 1, groups, g_stats);
     double split_err_true = 33.667;
 
-    EXPECT_EQ(split_err_true, split_err);
     EXPECT_TRUE(std::abs(split_err - split_err_true) < 1e-3);
+}
+
+
+TEST(BDTreeTest, BuildTest){
+    auto training_data = make_training_data();
+    BDTree bdtree;
+    bdtree.init(training_data);
+    bdtree.build(2, 0);
 
 }
+

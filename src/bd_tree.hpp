@@ -17,16 +17,15 @@ struct BDIndex{
     using entry_t = std::vector<score_t>;
     using bounds_t = std::vector<std::pair<std::size_t, BDIndex::key_t>>;
 
-    std::vector<entry_t> _index;
+    std::map<key_t, entry_t> _index;
 
     // accessors for some basic properties
     std::size_t size() const    {return _index.size();}
-    entry_t operator [](const key_t key)              {return _index[key];}
-    const entry_t operator [](const key_t key) const  {return _index[key];}
+    entry_t& operator [](const key_t &key)              {return _index.at(key);}
+    const entry_t& operator [](const key_t& key) const  {return _index.at(key);}
 
     // add a new score to the index
-    void add_score(const key_t key, const score_t &score){
-        while(key + 1 > _index.size())_index.push_back(entry_t());
+    void add_score(const key_t &key, const score_t &score){
         _index[key].push_back(score);
     }
 
@@ -100,20 +99,21 @@ struct BDTree{
         _n_users = _user_index.size();
         // initialize the root of the tree
         _root = std::unique_ptr<BDNode>(new BDNode);
-        _root->_depth = 0u;
+        _root->_depth = 1u;
         _root->_num_ratings = training_data.size();
         _root->_parent = nullptr;
         // set root node's bounds
         for(const auto &entry : _item_index._index)
-            _root->_bounds.push_back({0, entry.size()});
+            _root->_bounds.push_back({0, entry.second.size()});
     }
 
     // computes the squared error given node's statistics
     double error2(const stats_t &stats){
         double err2{};
-        for(const auto &s : stats)
+        for(const auto &s : stats){
             err2 += static_cast<double>(std::get<1> (s.second)) -
                     static_cast<double>(std::get<0> (s.second) * std::get<0> (s.second)) / std::get<2> (s.second);
+        }
         return err2;
     }
 
@@ -124,7 +124,8 @@ struct BDTree{
         std::vector<stats_t::const_iterator> it_current;
         it_current.push_back(node_stats.cbegin());
         for(const auto &s : group_stats)
-            it_current.push_back(s.cbegin());
+            if(s.size() > 0)    it_current.push_back(s.cbegin());
+
         // pass over all the stats simultaneously and update the squared error
         while(it_current[0] != node_stats.cend()){
             // retrieve current node's stats
@@ -135,8 +136,9 @@ struct BDTree{
             int n = std::get<2> (item_stats);
             // subtract groups' stats to get the value for the unknowns
             // note: iterators for groups start from 1 in it_current vector
-            for(std::size_t gidx{1}; gidx <= group_stats.size(); ++gidx){
-                if(it_current[gidx]->first == item){
+            for(std::size_t gidx{1}; gidx < it_current.size(); ++gidx){
+                if(it_current[gidx] != group_stats[gidx].cend()
+                        && it_current[gidx]->first == item){
                     const auto &g_item_stats = it_current[gidx]->second;
                     sum -= std::get<0> (g_item_stats);
                     sum2 -= std::get<1> (g_item_stats);
@@ -151,6 +153,8 @@ struct BDTree{
         return err2;
     }
 
+    // computes the splitting error for a give candidate item
+    // users for each group and respective stats are also returned (unknowns excluded)
     double splitting_error(const BDNode_cptr node,
                            const BDIndex::key_t candidate,
                            std::vector<group_t> &groups,
@@ -174,14 +178,24 @@ struct BDTree{
         return split_err2;
     }
 
+    double split(BDNode_ptr node,
+                 const BDIndex::key_t splitter,
+                 const std::vector<group_t> &groups,
+                 const std::vector<group_t> &group_stats){
+        for(const auto &item : _item_index){
+
+        }
+
+    }
+
     void gdt_r(BDNode_ptr node, const unsigned depth_max, const std::size_t alpha){
         // check termination conditions on node's depth and number of ratings
-        if(node->_depth + 1 == depth_max || node->_num_ratings < alpha)
+        if(node->_depth == depth_max || node->_num_ratings < alpha)
             return;
         // compute statistics and squared error only for the root node
-        // descendant nodes will receive their statitistics and squared errors from their respective parents
-        if(node->_depth == 0){
-            node->_stats = _item_index.compute_stats(node->_bounds);
+        // descendant nodes will receive their statitistics and squared errors when forked by their parents
+        if(node->_depth == 1u){
+            node->_stats = _item_index.compute_stats(node->_bounds);    // move assignment (hopefully :-) )
             node->_error2 = error2(node->_stats);
         }
 
@@ -193,19 +207,23 @@ struct BDTree{
 
         // search for the item with the lowest splitting error
         for(BDIndex::key_t candidate{}; candidate < _n_items; ++candidate){
-            std::vector<group_t> c_groups;
-            std::vector<stats_t> c_stats;
+            std::vector<group_t> c_groups(2);
+            std::vector<stats_t> c_stats(2);
             double split_err = splitting_error(node, candidate, c_groups, c_stats);
             if(split_err < min_err){
                 node->_splitter = candidate;
                 min_err = split_err;
-                for(unsigned gidx{}; gidx < 2; ++gidx)
+                for(unsigned gidx{}; gidx < 2u; ++gidx){
                     groups[gidx].swap(c_groups[gidx]);
+                    stats[gidx].swap(c_stats[gidx]);
+                }
             }
         }
         // check termination condition on error reduction
         if(min_err > node->_error2)  return;
         // generate children
+        std::cout << "BEST Splitter: " << node->_splitter << std::endl;
+        std::cout << "BEST Error: " << min_err << std::endl;
     }
 
     void build(const unsigned depth_max, const std::size_t alpha){
