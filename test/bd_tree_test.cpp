@@ -34,7 +34,7 @@ std::vector<rating_t> build_training_data(){
 
 TEST(BDTreeTest, IndexTest){
     size_t n_users{11}, n_items{7};
-    BDTree bdtree;
+    BDTree bdtree{false, 0, 0};
     bdtree.init(build_training_data());
     // check the indices sizes
     ASSERT_EQ(n_items, bdtree._item_index.size());
@@ -81,11 +81,11 @@ TEST(BDTreeTest, IndexTest){
 }
 
 TEST(BDTreeTest, ErrorTest){
-    BDTree bdtree;
+    BDTree bdtree{false, 0, 0};
     bdtree.init(build_training_data());
 
     //check sums and counts
-    auto stats = bdtree._item_index.compute_stats(bdtree._root->_bounds);
+    auto stats = bdtree._user_index.compute_all_stats();
 
     EXPECT_EQ(14, std::get<0> (stats[0]));
     EXPECT_EQ(13, std::get<0> (stats[1]));
@@ -130,7 +130,7 @@ TEST(BDTreeTest, ErrorTest){
 }
 
 TEST(BDTreeTest, SortingTest){
-    BDTree bdtree;
+    BDTree bdtree{false, 0, 0};
     bdtree.init(build_training_data());
     std::vector<BDTree::group_t> groups{{0,4}, {1,7,9}};
     auto item_3_entry = bdtree._item_index[3];
@@ -151,7 +151,7 @@ TEST(BDTreeTest, SortingTest){
 }
 
 TEST(BDTreeTest, SplittingTest){
-    BDTree bdtree;
+    BDTree bdtree{false, 0, 0};
     bdtree.init(build_training_data());
     bdtree.build(2, 0);
 

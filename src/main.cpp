@@ -35,9 +35,10 @@ std::vector<rating_t> build_training_data(){
 int main(int argc, char **argv)
 {
     unsigned max_depth = std::strtoul(argv[1], nullptr, 10);
+    std::size_t min_ratings = std::strtoull(argv[2], nullptr, 10);
 
-    BDTree bdtree;
+    BDTree bdtree{true, 7, 200};
     bdtree.init(build_training_data());
-    bdtree.build(max_depth, 0);
+    bdtree.build(max_depth, min_ratings);
 }
 

@@ -5,7 +5,6 @@
 #include <utility>
 #include <vector>
 #include <map>
-#include <unordered_map>
 #include <limits>
 #include <iostream>
 #include <sstream>
@@ -13,15 +12,17 @@
 #include <cassert>
 #include "../util/basic_log.hpp"
 
-using stats_t = std::map<std::size_t, std::tuple<int, int, int>>;
+using stats_t = std::map<std::size_t, std::tuple<double, double, int>>;
 struct BDIndex{
     using key_t = std::size_t;
-    using score_t = std::pair<key_t, int>;
+    using score_t = std::pair<key_t, double>;
     using entry_t = std::vector<score_t>;
     using bound_t = std::pair<std::size_t, std::size_t>;
-    using bound_map_t = std::unordered_map<key_t, bound_t>;
+    using bound_map_t = std::map<key_t, bound_t>;
 
     std::map<key_t, entry_t> _index;
+
+    BDIndex():_index{}{}
 
     // accessors for some basic properties
     std::size_t size() const    {return _index.size();}
@@ -39,20 +40,9 @@ struct BDIndex{
         _index[key].push_back(score);
     }
 
-    // returns the sum, squared sum and count of ratings for each entry between the specified bounds
-    stats_t compute_stats(const bound_map_t &bounds){
-        assert(_index.size() == bounds.size());
-        stats_t stats;
-        for(std::size_t entry_idx{}; entry_idx < _index.size(); ++entry_idx){
-            auto it_left = _index[entry_idx].cbegin() + bounds.at(entry_idx).first;
-            auto it_right = _index[entry_idx].cbegin() + bounds.at(entry_idx).second;
-            for(auto it_score = it_left; it_score != it_right; ++it_score){
-                auto &s = stats[entry_idx];
-                std::get<0> (s) += it_score->second;
-                std::get<1> (s) += it_score->second * it_score->second;
-                ++std::get<2> (s);
-            }
-        }
+    stats_t compute_all_stats(){
+        stats_t stats{};
+        for(const auto &entry : _index) update_stats(stats, entry.first);
         return stats;
     }
 
@@ -88,39 +78,65 @@ struct BDTree{
         // item_index
         BDIndex::bound_map_t _bounds;
 
+        BDNode():_id{}, _splitter{}, _error2{}, _num_ratings{}, _stats{}, _parent{nullptr}, _children{}, _bounds{}{}
+
     };
     using BDNode_ptr = BDNode*;
     using BDNode_cptr = BDNode const*;
     using rating_tuple = std::tuple<std::size_t, std::size_t, int>;
     using group_t = std::vector<BDIndex::key_t>;
 
-    BasicLogger log{std::cout};
+    BasicLogger _log;
     BDIndex _item_index;
     BDIndex _user_index;
     std::unique_ptr<BDNode> _root;
     std::size_t _n_users;
     std::size_t _n_items;
     std::size_t _node_counter;
+    double _global_mean;
+    bool _fix_user_bias;
+    double _lambda;
+    double _lambda1;
+
+    BDTree(bool fix_user_bias, double lambda, double lambda1):
+        _log{std::cout}, _item_index{}, _user_index{}, _root{nullptr}, _n_users{}, _n_items{},
+        _node_counter{}, _global_mean{}, _fix_user_bias{fix_user_bias}, _lambda{lambda}, _lambda1{lambda1}{}
+
 
     // builds the item and user indices given the training data
     void init(const std::vector<rating_tuple> &training_data){
         for(const auto &rat : training_data){
             _item_index.add_score(std::get<1>(rat), BDIndex::score_t(std::get<0>(rat), std::get<2>(rat)));
             _user_index.add_score(std::get<0>(rat), BDIndex::score_t(std::get<1>(rat), std::get<2>(rat)));
+            _global_mean += std::get<2> (rat);
         }
+        _global_mean /= training_data.size();
         _n_items = _item_index.size();
         _n_users = _user_index.size();
-        _node_counter = 0u;
+        if(_fix_user_bias)  fix_user_biases();
         // initialize the root of the tree
         _root = std::unique_ptr<BDNode>(new BDNode);
         _root->_id = _node_counter++;
         _root->_level = 1u;
         _root->_num_ratings = training_data.size();
-        _root->_parent = nullptr;
         // set root node's bounds
         for(const auto &entry : _item_index)
             _root->_bounds[entry.first] = {0, entry.second.size()};
         std::cout << "ROOT generated" << std::endl;
+    }
+
+    void fix_user_biases(){
+        for(auto &entry : _user_index){
+            double bu{};
+            // compute the bias for each user
+            for(const auto &score : entry.second)
+                bu += score.second;
+            bu += _lambda * _global_mean;
+            bu /= (entry.second.size() + _lambda);
+            // then subtract the bias from each score of the user in the user_idx
+            for(auto &score : entry.second)
+                score.second -= bu;
+        }
     }
 
     void print_stats(const stats_t &stats){
@@ -131,13 +147,13 @@ struct BDTree{
                          std::get<2> (s.second) << std::endl;
         }
     }
+
     // computes the squared error given node's statistics
     double error2(const stats_t &stats){
         double err2{};
         for(const auto &s : stats){
             if(std::get<2> (s.second) > 0)
-                err2 += static_cast<double>(std::get<1> (s.second)) -
-                        static_cast<double>(std::get<0> (s.second) * std::get<0> (s.second)) / std::get<2> (s.second);
+                err2 += std::get<1> (s.second) - std::get<0> (s.second) * std::get<0> (s.second) / std::get<2> (s.second);
         }
         return err2;
     }
@@ -155,9 +171,9 @@ struct BDTree{
             // retrieve current node's stats
             const auto &item = it_stats[0]->first;
             const auto &item_stats = it_stats[0]->second;
-            int sum = std::get<0> (item_stats);
-            int sum2 = std::get<1> (item_stats);
-            int n = std::get<2> (item_stats);
+            double sum = std::get<0> (item_stats);
+            double sum2 = std::get<1> (item_stats);
+            double n = std::get<2> (item_stats);
             // subtract groups' stats to get the value for the unknowns
             // note: iterators for groups start from 1 in it_current vector
             for(std::size_t gidx{1}; gidx < it_stats.size(); ++gidx){
@@ -193,7 +209,8 @@ struct BDTree{
         for(auto it_score = it_left; it_score < it_right; ++it_score){
             if(it_score->second >= 4){  // loved item
                 groups[0].push_back(it_score->first);
-                _user_index.update_stats(group_stats[0], it_score->first);
+                 _user_index.update_stats(group_stats[0], it_score->first);
+
             }else{  // hated item
                 groups[1].push_back(it_score->first);
                 _user_index.update_stats(group_stats[1], it_score->first);
@@ -279,19 +296,19 @@ struct BDTree{
         // compute statistics and squared error only for the root node
         // descendant nodes will receive their statistics and squared errors when forked by their parents
         if(node->_level == 1u){
-            node->_stats = _item_index.compute_stats(node->_bounds);
+            node->_stats = _user_index.compute_all_stats();
             node->_error2 = error2(node->_stats);
         }
-        log.node(node->_id, node->_level) << "Number of ratings: " << node->_num_ratings << std::endl;
-        log.node(node->_id, node->_level) << "Squared error: " << node->_error2 << std::endl;
+        _log.node(node->_id, node->_level) << "Number of ratings: " << node->_num_ratings << std::endl;
+        _log.node(node->_id, node->_level) << "Squared error: " << node->_error2 << std::endl;
 
         // check termination conditions on node's depth and number of ratings
         if(node->_level == depth_max){
-            log.node(node->_id, node->_level) << "Maximum depth (" << depth_max << ") reached. STOP." << std::endl;
+            _log.node(node->_id, node->_level) << "Maximum depth (" << depth_max << ") reached. STOP." << std::endl;
             return;
         }
         if(node->_num_ratings < alpha){
-            log.node(node->_id, node->_level) << "This node has <" << alpha << " ratings. STOP." << std::endl;
+            _log.node(node->_id, node->_level) << "This node has <" << alpha << " ratings. STOP." << std::endl;
             return;
         }
 
@@ -317,12 +334,12 @@ struct BDTree{
                 group_errors.swap(c_errors);
             }
         }
-        log.node(node->_id, node->_level) << "Best candidate: " << best_candidate << std::endl;
-        log.node(node->_id, node->_level) << "Splitting error: " << min_err << std::endl;
+        _log.node(node->_id, node->_level) << "Best candidate: " << best_candidate << std::endl;
+        _log.node(node->_id, node->_level) << "Splitting error: " << min_err << std::endl;
 
         // check termination condition on error reduction
         if(min_err >= node->_error2){
-            log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
+            _log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
             return;
         }
         node->_splitter = best_candidate;
