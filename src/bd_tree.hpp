@@ -7,7 +7,6 @@
 #include <map>
 #include <limits>
 #include <iostream>
-#include <sstream>
 #include <memory>
 #include <cassert>
 #include "../util/basic_log.hpp"
@@ -65,7 +64,6 @@ struct BDTree{
         double _error2;
         unsigned _level;
         std::size_t _num_ratings;
-        stats_t _stats;
         // pointer to node's parent for hierarchial smoothing
         BDNode * _parent;
         // according to (Golbandi, 2011) descendants of the current node
@@ -76,9 +74,12 @@ struct BDTree{
         // instead of duplicating the user set for each split, each node keeps only
         // the [left, right) boundaries of the users that are associated to it for each row of the
         // item_index
-        BDIndex::bound_map_t _bounds;
 
-        BDNode():_id{}, _splitter{}, _error2{}, _num_ratings{}, _stats{}, _parent{nullptr}, _children{}, _bounds{}{}
+        // temporary data required during training
+        BDIndex::bound_map_t _bounds;
+        stats_t _stats;
+
+        BDNode():_id{}, _splitter{}, _error2{}, _num_ratings{}, _parent{nullptr}, _children{}, _bounds{}, _stats{}{}
 
     };
     using BDNode_ptr = BDNode*;
@@ -96,11 +97,11 @@ struct BDTree{
     double _global_mean;
     bool _fix_user_bias;
     double _lambda;
-    double _lambda1;
+    double _h_smooth;
 
-    BDTree(bool fix_user_bias, double lambda, double lambda1):
+    BDTree(bool fix_user_bias, double lambda, double h_smooth):
         _log{std::cout}, _item_index{}, _user_index{}, _root{nullptr}, _n_users{}, _n_items{},
-        _node_counter{}, _global_mean{}, _fix_user_bias{fix_user_bias}, _lambda{lambda}, _lambda1{lambda1}{}
+        _node_counter{}, _global_mean{}, _fix_user_bias{fix_user_bias}, _lambda{lambda}, _h_smooth{h_smooth}{}
 
 
     // builds the item and user indices given the training data
@@ -290,6 +291,11 @@ struct BDTree{
                 node->_children[gidx]->_num_ratings += g_bounds[gidx].second - g_bounds[gidx].first;
             }
         }
+    }
+
+
+    void predict_and_clean(BDNode_ptr node){
+
     }
 
     void gdt_r(BDNode_ptr node, const unsigned depth_max, const std::size_t alpha){
