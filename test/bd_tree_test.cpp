@@ -4,7 +4,7 @@
 
 using rating_t = BDTree::rating_tuple;
 
-std::vector<rating_t> make_training_data(){
+std::vector<rating_t> build_training_data(){
     return std::vector<rating_t> {
         rating_t(0, 0, 4),
         rating_t(0, 1, 1),
@@ -34,9 +34,8 @@ std::vector<rating_t> make_training_data(){
 
 TEST(BDTreeTest, IndexTest){
     size_t n_users{11}, n_items{7};
-    auto training_data = make_training_data();
     BDTree bdtree;
-    bdtree.init(training_data);
+    bdtree.init(build_training_data());
     // check the indices sizes
     ASSERT_EQ(n_items, bdtree._item_index.size());
     ASSERT_EQ(n_users, bdtree._user_index.size());
@@ -82,9 +81,8 @@ TEST(BDTreeTest, IndexTest){
 }
 
 TEST(BDTreeTest, ErrorTest){
-    auto training_data = make_training_data();
     BDTree bdtree;
-    bdtree.init(training_data);
+    bdtree.init(build_training_data());
 
     //check sums and counts
     auto stats = bdtree._item_index.compute_stats(bdtree._root->_bounds);
@@ -122,18 +120,18 @@ TEST(BDTreeTest, ErrorTest){
     EXPECT_TRUE(std::abs(node_err - true_err) < eps);
 
     //check splitting error
-    std::vector<BDTree::group_t> groups(2);
-    std::vector<stats_t> g_stats(2);
-    double split_err = bdtree.splitting_error(bdtree._root.get(), 1, groups, g_stats);
+    std::vector<BDTree::group_t> groups;
+    std::vector<stats_t> g_stats;
+    std::vector<double> g_errors;
+    double split_err = bdtree.splitting_error(bdtree._root.get(), 1, groups, g_stats, g_errors);
     double split_err_true = 33.667;
 
     EXPECT_TRUE(std::abs(split_err - split_err_true) < 1e-3);
 }
 
 TEST(BDTreeTest, SortingTest){
-    auto training_data = make_training_data();
     BDTree bdtree;
-    bdtree.init(training_data);
+    bdtree.init(build_training_data());
     std::vector<BDTree::group_t> groups{{0,4}, {1,7,9}};
     auto item_3_entry = bdtree._item_index[3];
     auto prev_size = item_3_entry.size();
@@ -152,11 +150,40 @@ TEST(BDTreeTest, SortingTest){
     EXPECT_EQ(BDIndex::bound_t(5,5), bounds[2]);
 }
 
-TEST(BDTreeTest, BuildTest){
-    auto training_data = make_training_data();
+TEST(BDTreeTest, SplittingTest){
     BDTree bdtree;
-    bdtree.init(training_data);
+    bdtree.init(build_training_data());
     bdtree.build(2, 0);
+
+    ASSERT_EQ(3u, bdtree._root->_children.size());
+
+    auto &loved_child = bdtree._root->_children[0];
+    auto &hated_child = bdtree._root->_children[1];
+    auto &unknown_child = bdtree._root->_children[2];
+
+    EXPECT_EQ(BDIndex::bound_t(0,1), loved_child->_bounds[0]);
+    EXPECT_EQ(BDIndex::bound_t(0,1), loved_child->_bounds[1]);
+    EXPECT_EQ(BDIndex::bound_t(0,1), loved_child->_bounds[2]);
+    EXPECT_EQ(BDIndex::bound_t(0,2), loved_child->_bounds[3]);
+    EXPECT_EQ(BDIndex::bound_t(0,0), loved_child->_bounds[4]);
+    EXPECT_EQ(BDIndex::bound_t(0,0), loved_child->_bounds[5]);
+    EXPECT_EQ(BDIndex::bound_t(0,0), loved_child->_bounds[6]);
+
+    EXPECT_EQ(BDIndex::bound_t(1,1), hated_child->_bounds[0]);
+    EXPECT_EQ(BDIndex::bound_t(1,3), hated_child->_bounds[1]);
+    EXPECT_EQ(BDIndex::bound_t(1,3), hated_child->_bounds[2]);
+    EXPECT_EQ(BDIndex::bound_t(2,5), hated_child->_bounds[3]);
+    EXPECT_EQ(BDIndex::bound_t(0,0), hated_child->_bounds[4]);
+    EXPECT_EQ(BDIndex::bound_t(0,0), hated_child->_bounds[5]);
+    EXPECT_EQ(BDIndex::bound_t(0,1), hated_child->_bounds[6]);
+
+    EXPECT_EQ(BDIndex::bound_t(1,3), unknown_child->_bounds[0]);
+    EXPECT_EQ(BDIndex::bound_t(3,4), unknown_child->_bounds[1]);
+    EXPECT_EQ(BDIndex::bound_t(3,3), unknown_child->_bounds[2]);
+    EXPECT_EQ(BDIndex::bound_t(5,5), unknown_child->_bounds[3]);
+    EXPECT_EQ(BDIndex::bound_t(0,2), unknown_child->_bounds[4]);
+    EXPECT_EQ(BDIndex::bound_t(0,2), unknown_child->_bounds[5]);
+    EXPECT_EQ(BDIndex::bound_t(1,4), unknown_child->_bounds[6]);
 
 }
 

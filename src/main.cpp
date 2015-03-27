@@ -3,7 +3,7 @@
 
 using rating_t = BDTree::rating_tuple;
 
-std::vector<rating_t> make_training_data(){
+std::vector<rating_t> build_training_data(){
     return std::vector<rating_t> {
         rating_t(0, 0, 4),
         rating_t(0, 1, 1),
@@ -31,12 +31,13 @@ std::vector<rating_t> make_training_data(){
     };
 }
 
-int main()
-{
-    auto training_data = make_training_data();
-    BDTree bdtree;
-    bdtree.init(training_data);
-    bdtree.build(2, 0);
 
+int main(int argc, char **argv)
+{
+    unsigned max_depth = std::strtoul(argv[1], nullptr, 10);
+
+    BDTree bdtree;
+    bdtree.init(build_training_data());
+    bdtree.build(max_depth, 0);
 }
 

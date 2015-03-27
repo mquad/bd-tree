@@ -8,8 +8,10 @@
 #include <unordered_map>
 #include <limits>
 #include <iostream>
+#include <sstream>
 #include <memory>
 #include <cassert>
+#include "../util/basic_log.hpp"
 
 using stats_t = std::map<std::size_t, std::tuple<int, int, int>>;
 struct BDIndex{
@@ -67,10 +69,11 @@ struct BDIndex{
 
 struct BDTree{
     struct BDNode{
+        std::size_t _id;
         // index of the splitter associate with the node wrt to the item_index
         BDIndex::key_t _splitter;
         double _error2;
-        unsigned _depth;
+        unsigned _level;
         std::size_t _num_ratings;
         stats_t _stats;
         // pointer to node's parent for hierarchial smoothing
@@ -79,7 +82,7 @@ struct BDTree{
         // are mapped to the users that either loved, hated or do not known
         // the splitter item. Thus, each node has 3 descendants, corresponding to
         // a partitioning of the set of users associated to it
-        std::unique_ptr<BDNode> _children[3];
+        std::vector<std::unique_ptr<BDNode>> _children;
         // instead of duplicating the user set for each split, each node keeps only
         // the [left, right) boundaries of the users that are associated to it for each row of the
         // item_index
@@ -91,11 +94,13 @@ struct BDTree{
     using rating_tuple = std::tuple<std::size_t, std::size_t, int>;
     using group_t = std::vector<BDIndex::key_t>;
 
+    BasicLogger log{std::cout};
     BDIndex _item_index;
     BDIndex _user_index;
-    std::shared_ptr<BDNode> _root;
+    std::unique_ptr<BDNode> _root;
     std::size_t _n_users;
     std::size_t _n_items;
+    std::size_t _node_counter;
 
     // builds the item and user indices given the training data
     void init(const std::vector<rating_tuple> &training_data){
@@ -105,28 +110,40 @@ struct BDTree{
         }
         _n_items = _item_index.size();
         _n_users = _user_index.size();
+        _node_counter = 0u;
         // initialize the root of the tree
         _root = std::unique_ptr<BDNode>(new BDNode);
-        _root->_depth = 1u;
+        _root->_id = _node_counter++;
+        _root->_level = 1u;
         _root->_num_ratings = training_data.size();
         _root->_parent = nullptr;
         // set root node's bounds
         for(const auto &entry : _item_index)
             _root->_bounds[entry.first] = {0, entry.second.size()};
+        std::cout << "ROOT generated" << std::endl;
     }
 
+    void print_stats(const stats_t &stats){
+        for(const auto &s:stats){
+            std::cout << "stats item "<< s.first << std::endl;
+            std::cout << std::get<0> (s.second) << " " <<
+                         std::get<1> (s.second) << " " <<
+                         std::get<2> (s.second) << std::endl;
+        }
+    }
     // computes the squared error given node's statistics
     double error2(const stats_t &stats){
         double err2{};
         for(const auto &s : stats){
-            err2 += static_cast<double>(std::get<1> (s.second)) -
-                    static_cast<double>(std::get<0> (s.second) * std::get<0> (s.second)) / std::get<2> (s.second);
+            if(std::get<2> (s.second) > 0)
+                err2 += static_cast<double>(std::get<1> (s.second)) -
+                        static_cast<double>(std::get<0> (s.second) * std::get<0> (s.second)) / std::get<2> (s.second);
         }
         return err2;
     }
 
     void add_unknown_stats(const stats_t &node_stats, std::vector<stats_t> &group_stats){
-        stats_t unknown_stats;
+        stats_t unknown_stats{};
         // initialize the pointers to the current element for each stats
         std::vector<stats_t::const_iterator> it_stats;
         it_stats.push_back(node_stats.cbegin());
@@ -153,7 +170,7 @@ struct BDTree{
                     ++it_stats[gidx];
                 }
             }
-            if(n > 0) unknown_stats.emplace(item, stats_t::mapped_type(sum, sum2, n));
+            if(n>0) unknown_stats[item] = stats_t::mapped_type{sum, sum2, n};
             ++it_stats[0];
         }
         // append unknown stats to groups'
@@ -165,7 +182,11 @@ struct BDTree{
     double splitting_error(const BDNode_cptr node,
                            const BDIndex::key_t candidate,
                            std::vector<group_t> &groups,
-                           std::vector<stats_t> &group_stats){
+                           std::vector<stats_t> &group_stats,
+                           std::vector<double> &group_errors){
+        groups.assign(2, group_t{});
+        group_stats.assign(2, stats_t{});
+
         auto it_left = _item_index.at(candidate).cbegin() + node->_bounds.at(candidate).first;
         auto it_right = _item_index.at(candidate).cbegin() + node->_bounds.at(candidate).second;
 
@@ -179,10 +200,13 @@ struct BDTree{
             }
         }
         add_unknown_stats(node->_stats, group_stats);
+        //compute the split error
         double split_err2{};
-        split_err2 += error2(group_stats[0]);   // loved error
-        split_err2 += error2(group_stats[1]);   // hated error
-        split_err2 += error2(group_stats[2]);    // unknowns error
+        for(const auto &stats : group_stats){
+            double gerr2{error2(stats)};
+            group_errors.push_back(gerr2);
+            split_err2 += gerr2;
+        }
         return split_err2;
     }
 
@@ -198,13 +222,14 @@ struct BDTree{
         for(const auto &g : groups)
             it_groups.push_back(g.cbegin());
         // split the input range according to groups
-        bool unknown = true;
+        bool unknown{true};
         for(auto it = left; it != right; ++it, unknown = true){
             for(std::size_t gidx{}; gidx < groups.size(); ++gidx){
-                while(*it_groups[gidx] < it->first &&
-                      it_groups[gidx] < groups[gidx].cend())
+                while(it_groups[gidx] < groups[gidx].cend() &&
+                      *it_groups[gidx] < it->first)
                     ++it_groups[gidx];
-                if(*it_groups[gidx] == it->first){
+                if(it_groups[gidx] < groups[gidx].cend() &&
+                        *it_groups[gidx] == it->first){
                     chunks[gidx].push_back(*it);
                     unknown = false;
                 }
@@ -217,60 +242,95 @@ struct BDTree{
         for(const auto &chunk : chunks){
             std::copy(chunk.cbegin(), chunk.cend(), left + start);
             bounds.push_back(BDIndex::bound_t(start, start + chunk.size()));
-            std::cout << "bounds : " << start << ", " << start + chunk.size() << std::endl;
             start += chunk.size();
         }
         return bounds;
     }
 
     void split(BDNode_ptr node,
-                 const std::vector<group_t> &groups,
-                 const std::vector<group_t> &group_stats){
-        // fork node's childrens
-
+               const std::vector<group_t> &groups,
+               const std::vector<stats_t> &group_stats,
+               const std::vector<double> &group_errors){
+        // fork children, one for each entry in group_stats
+        for(std::size_t child_idx{}; child_idx < group_stats.size(); ++child_idx){
+            BDNode_ptr child = new BDNode;
+            child->_id = _node_counter++;
+            child->_level = node->_level + 1;
+            child->_parent = node;
+            child->_num_ratings = 0u;
+            child->_stats = group_stats[child_idx];
+            child->_error2 = group_errors[child_idx];
+            node->_children.push_back(std::unique_ptr<BDNode>(child));
+        }
+        // set the boundaries on the item index for each child node
+        // according to the group of users they have been assigned to
         for(auto &entry : _item_index){
             auto it_left = entry.second.begin() + node->_bounds.at(entry.first).first;
             auto it_right = entry.second.begin() + node->_bounds.at(entry.first).second;
+            const auto g_bounds = sort_by_group(it_left, it_right, groups);
+            for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
+                node->_children[gidx]->_bounds[entry.first] = g_bounds[gidx];
+                node->_children[gidx]->_num_ratings += g_bounds[gidx].second - g_bounds[gidx].first;
+            }
         }
-
     }
 
     void gdt_r(BDNode_ptr node, const unsigned depth_max, const std::size_t alpha){
-        // check termination conditions on node's depth and number of ratings
-        if(node->_depth == depth_max || node->_num_ratings < alpha)
-            return;
         // compute statistics and squared error only for the root node
-        // descendant nodes will receive their statitistics and squared errors when forked by their parents
-        if(node->_depth == 1u){
+        // descendant nodes will receive their statistics and squared errors when forked by their parents
+        if(node->_level == 1u){
             node->_stats = _item_index.compute_stats(node->_bounds);
             node->_error2 = error2(node->_stats);
+        }
+        log.node(node->_id, node->_level) << "Number of ratings: " << node->_num_ratings << std::endl;
+        log.node(node->_id, node->_level) << "Squared error: " << node->_error2 << std::endl;
+
+        // check termination conditions on node's depth and number of ratings
+        if(node->_level == depth_max){
+            log.node(node->_id, node->_level) << "Maximum depth (" << depth_max << ") reached. STOP." << std::endl;
+            return;
+        }
+        if(node->_num_ratings < alpha){
+            log.node(node->_id, node->_level) << "This node has <" << alpha << " ratings. STOP." << std::endl;
+            return;
         }
 
         // lovers and haters groups
         // unknowns is implicitly determined by these two groups and the set of items associate to the node, so we don't store it explicitly
-        std::vector<group_t> groups(2);
-        std::vector<stats_t> stats(2);
-        double min_err = std::numeric_limits<double>::max();
+        BDIndex::key_t best_candidate{};
+        std::vector<group_t> groups{};
+        std::vector<stats_t> group_stats{};
+        std::vector<double> group_errors{};
+        double min_err{std::numeric_limits<double>::max()};
 
         // search for the item with the lowest splitting error
         for(BDIndex::key_t candidate{}; candidate < _n_items; ++candidate){
-            std::vector<group_t> c_groups(2);
-            std::vector<stats_t> c_stats(2);
-            double split_err = splitting_error(node, candidate, c_groups, c_stats);
+            std::vector<group_t> c_groups{};
+            std::vector<stats_t> c_stats{};
+            std::vector<double> c_errors{};
+            double split_err = splitting_error(node, candidate, c_groups, c_stats, c_errors);
             if(split_err < min_err){
-                node->_splitter = candidate;
                 min_err = split_err;
-                for(unsigned gidx{}; gidx < 2u; ++gidx){
-                    groups[gidx].swap(c_groups[gidx]);
-                    stats[gidx].swap(c_stats[gidx]);
-                }
+                best_candidate = candidate;
+                groups.swap(c_groups);
+                group_stats.swap(c_stats);
+                group_errors.swap(c_errors);
             }
         }
+        log.node(node->_id, node->_level) << "Best candidate: " << best_candidate << std::endl;
+        log.node(node->_id, node->_level) << "Splitting error: " << min_err << std::endl;
+
         // check termination condition on error reduction
-        if(min_err > node->_error2)  return;
+        if(min_err >= node->_error2){
+            log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
+            return;
+        }
+        node->_splitter = best_candidate;
         // generate children
-        std::cout << "BEST Splitter: " << node->_splitter << std::endl;
-        std::cout << "BEST Error: " << min_err << std::endl;
+        split(node, groups, group_stats, group_errors);
+        //recursive call
+        for(auto &child : node->_children)
+            gdt_r(child.get(), depth_max, alpha);
     }
 
     void build(const unsigned depth_max, const std::size_t alpha){
