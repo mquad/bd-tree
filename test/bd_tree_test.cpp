@@ -2,8 +2,6 @@
 #include <cmath>
 #include "bd_tree.hpp"
 
-using rating_t = BDTree::rating_tuple;
-
 std::vector<rating_t> build_training_data(){
     return std::vector<rating_t> {
         rating_t(0, 0, 4),

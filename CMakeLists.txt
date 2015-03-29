@@ -17,7 +17,7 @@ link_directories(${binary_dir})
 #configure the compiler
 set (CMAKE_CXX_COMPILER "g++")
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -pedantic -fopenmp -openmp")
-set (CMAKE_CXX_FLAGS_DEBUG "-O0 -g ")
+set (CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
 set (CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
 
 #add subdirectories
