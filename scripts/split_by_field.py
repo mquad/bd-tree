@@ -37,8 +37,8 @@ def write_split(fdict, fname, outdir, train_keys, test_keys):
 
 
 def split_dict(train_fpath, test_fpath, outdir, key_idx=0, sampling_perc=1, train_perc=0.75, delim='\t'):
-    train_dict = build_dict(train_fpath, key_idx, delim)
-    test_dict = build_dict(test_fpath, key_idx, delim)
+    train_dict = build_dict(train_fpath, key_idx, sampling_perc, delim)
+    test_dict = build_dict(test_fpath, key_idx, sampling_perc, delim)
     # shuffle keys
     keys_shuffled = np.asarray(train_dict.keys())
     np.random.shuffle(keys_shuffled)
