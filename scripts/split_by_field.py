@@ -48,8 +48,8 @@ def split_dict(train_fpath, test_fpath, outdir, key_idx=0, sampling_perc=1, trai
     train_size = int(sample_size*train_perc)
     train_keys = keys_sampled[:train_size]
     test_keys = keys_sampled[train_size:]
-    write_split(train_dict, path.splitext(path.split(train_fpath)[-1])[-1], outdir, train_keys, test_keys)
-    write_split(test_dict, path.splitext(path.split(test_fpath)[-1])[-1], outdir, train_keys, test_keys)
+    write_split(train_dict, path.splitext(path.split(train_fpath)[-1])[0], outdir, train_keys, test_keys)
+    write_split(test_dict, path.splitext(path.split(test_fpath)[-1])[0], outdir, train_keys, test_keys)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
