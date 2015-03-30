@@ -18,7 +18,7 @@ def extract(full_fpath, probe_fpath):
             else:
                 user = pline
                 while True:
-                    fline = full_file.readline()
+                    fline = full_file.readline().strip()
                     if fline.split('\t')[:1] != [user, item]:
                         train_file.write(fline)
                     else:

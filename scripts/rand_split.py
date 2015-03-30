@@ -6,7 +6,7 @@ from os import path
 
 
 def split(fpath, outdir, perc=.75):
-    fname = path.split(fpath)[-1]
+    fname = path.splitext(path.split(fpath))[-1]
     with open(fpath, 'r') as in_file,\
         open(path.join(outdir, fname + '.train'), 'w') as train_file,\
         open(path.join(outdir, fname + '.test'), 'w') as test_file:
