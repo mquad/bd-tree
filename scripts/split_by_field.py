@@ -15,14 +15,15 @@ def build_dict(fname, key_idx=0, delim='\t'):
     return mydict
 
 
-def build_dict(fpath, key_id=0, delim='\t'):
+def build_dict(fpath, key_id=0, sampling_rate=1, delim='\t'):
     fdict = dict()
     with open(fpath, 'r') as infile:
         for line in infile:
             key = line.split(delim)[key_id]
             if key not in fdict:
                 fdict[key] = []
-            fdict[key].append(line)
+            if np.random.rand() < sampling_rate:
+                fdict[key].append(line)
     return fdict
 
 
@@ -41,15 +42,13 @@ def split_dict(train_fpath, test_fpath, outdir, key_idx=0, sampling_perc=1, trai
     # shuffle keys
     keys_shuffled = np.asarray(train_dict.keys())
     np.random.shuffle(keys_shuffled)
-    # sample keys
-    sample_size = int(len(keys_shuffled)*sampling_perc)
-    keys_sampled = keys_shuffled[:sample_size]
+    key_size = len(keys_shuffled)
     # split the sample into training and test keys
-    train_size = int(sample_size*train_perc)
-    train_keys = keys_sampled[:train_size]
-    test_keys = keys_sampled[train_size:]
-    write_split(train_dict, path.splitext(path.split(train_fpath)[-1])[0], outdir, train_keys, test_keys)
-    write_split(test_dict, path.splitext(path.split(test_fpath)[-1])[0], outdir, train_keys, test_keys)
+    train_size = int(key_size*train_perc)
+    train_keys = keys_shuffled[:train_size]
+    test_keys = keys_shuffled[train_size:]
+    write_split(train_dict, path.split(train_fpath)[-1], outdir, train_keys, test_keys)
+    write_split(test_dict, path.split(test_fpath)[-1], outdir, train_keys, test_keys)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
