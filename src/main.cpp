@@ -29,16 +29,15 @@ int main(int argc, char **argv)
     std::size_t min_ratings = std::strtoull(argv[8], nullptr, 10);
 
     // build the decision tree
-    BDTree bdtree{true, lambda, h_smoothing};
+    BDTree bdtree{lambda, h_smoothing};
     bdtree.init(import(training_file));
     bdtree.build(max_depth, min_ratings);
 
     user_profiles_t query_profiles, test_profiles;
-    double query_mu = build_profiles(query_file, query_profiles);
+    build_profiles(query_file, query_profiles);
     build_profiles(test_file, test_profiles);
-    auto query_bu = compute_bu(query_profiles, query_mu, lambda);
     // evaluate tree quality
-    double rmse_val = evaluate(bdtree, query_profiles, test_profiles, query_bu, rmse);
+    double rmse_val = evaluate(bdtree, query_profiles, test_profiles, rmse);
     std::cout << "RMSE: " << rmse_val << std::endl;
     return 0;
 }

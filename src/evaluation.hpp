@@ -43,15 +43,12 @@ std::unordered_map<std::size_t, double> compute_bu(const user_profiles_t &profil
 }
 
 
-double rmse(const BDTree &bdtree,
-            const profile_t &answers,
-            const profile_t &test,
-            const double bu){
+double rmse(const BDTree &bdtree, const profile_t &answers, const profile_t &test){
     double mse{};
     std::size_t n{test.size()};
     const auto leaf = bdtree.traverse(answers);
     for(const auto &ans : test){
-        double pred_r = bu + bdtree.predict(leaf, ans.first);
+        double pred_r = bdtree.predict(leaf, ans.first);
         double actual_r = ans.second;
         mse += std::pow(pred_r - actual_r, 2);
     }
@@ -61,13 +58,12 @@ double rmse(const BDTree &bdtree,
 double evaluate(const BDTree &bdtree,
                 const user_profiles_t &query,
                 const user_profiles_t &test,
-                const std::unordered_map<std::size_t, double> query_bu,
-                double (*metric)(const BDTree&, const profile_t&, const profile_t&, const double)){
+                double (*metric)(const BDTree&, const profile_t&, const profile_t&)){
     double metric_sum{};
     std::size_t n{query.size()};
     for(const auto &ans : query){
         if(test.count(ans.first) > 0)
-            metric_sum += metric(bdtree, ans.second, test.at(ans.first), query_bu.at(ans.first));
+            metric_sum += metric(bdtree, ans.second, test.at(ans.first));
     }
     return metric_sum / n;
 

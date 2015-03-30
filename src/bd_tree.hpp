@@ -32,11 +32,12 @@ struct rating_t{
 };
 
 struct stats_t{
-    double _sum;
-    double _sum2;
+    double _sum, _sum_unbiased;
+    double _sum2, _sum2_unbiased;
     int _n;
-    stats_t(double sum, double sum2, int n) : _sum{sum}, _sum2{sum2}, _n{n}{}
-    stats_t() : stats_t{.0, .0, 0}{}
+    stats_t(double sum, double sum_unbiased, double sum2, double sum2_unbiased, int n) :
+        _sum{sum}, _sum_unbiased{sum_unbiased}, _sum2{sum2}, _sum2_unbiased{sum2_unbiased}, _n{n}{}
+    stats_t() : stats_t{.0, .0, .0, .0, 0}{}
 };
 
 struct score_t{
@@ -84,28 +85,33 @@ struct BDIndex{
     entry_t& operator[] (const key_t &key)  {return _index[key];}
 
     decltype(_index.begin()) begin()    {return _index.begin();}
-    decltype(_index.end()) end()    {return _index.end();}
-    decltype(_index.cbegin()) cbegin()  {return _index.cbegin();}
-    decltype(_index.cend()) cend()  {return _index.cend();}
+    decltype(_index.end()) end()        {return _index.end();}
+    decltype(_index.cbegin()) cbegin() const    {return _index.cbegin();}
+    decltype(_index.cend()) cend() const        {return _index.cend();}
 
     // add a new score to the index
     void add_score(const key_t &key, const score_t &score){
         _index[key].push_back(score);
     }
 
-    stat_map_t root_stats(){
+    stat_map_t root_stats(const std::unordered_map<std::size_t, double> &user_biases) const{
         stat_map_t stats{};
-        for(const auto &entry : _index) update_stats(stats, entry.first);
+        for(const auto &entry : _index) update_stats(stats, entry.first, user_biases.at(entry.first));
         return stats;
     }
 
     // updates the stats with all the values associated to a given key
-    void update_stats(stat_map_t &stats, const key_t key){
-        for(const auto &score : _index[key]){
-            auto &s = stats[score._id];
-            s._sum += score._rating;
-            s._sum2 += score._rating * score._rating;
-            ++s._n;
+    void update_stats(stat_map_t &stats, const key_t key, const double bu) const{
+        if(_index.count(key) > 0){
+            for(const auto &score : _index.at(key)){
+                auto &s = stats[score._id];
+                s._sum += score._rating;
+                s._sum2 += score._rating * score._rating;
+                double r_unbiased = score._rating - bu;
+                s._sum_unbiased += r_unbiased;
+                s._sum2_unbiased += r_unbiased * r_unbiased;
+                ++s._n;
+            }
         }
     }
 };
@@ -153,13 +159,12 @@ struct BDTree{
     std::size_t _n_items;
     std::size_t _node_counter;
     double _global_mean;
-    bool _fix_user_bias;
     double _lambda;
     double _h_smooth;
 
-    BDTree(bool fix_user_bias = true, double lambda = 7, double h_smooth = 200):
+    BDTree(double lambda = 7, double h_smooth = 200):
         _log{std::cout}, _item_index{}, _user_index{}, _root{nullptr}, _user_biases{}, _n_users{}, _n_items{},
-        _node_counter{}, _global_mean{}, _fix_user_bias{fix_user_bias}, _lambda{lambda}, _h_smooth{h_smooth}{}
+        _node_counter{}, _global_mean{}, _lambda{lambda}, _h_smooth{h_smooth}{}
 
 
     // builds the item and user indices given the training data
@@ -175,7 +180,7 @@ struct BDTree{
         std::cout << "TRAINING:" << std::endl
                      << "Num. users: " << _n_users << std::endl
                      << "Num. items: " << _n_items << std::endl;
-        if(_fix_user_bias)  fix_user_biases();
+        compute_biases();
         // initialize the root of the tree
         _root = std::unique_ptr<BDNode>(new BDNode);
         _root->_id = _node_counter++;
@@ -187,8 +192,8 @@ struct BDTree{
     void build(const unsigned depth_max, const std::size_t min_ratings){
         // compute statistics and squared error only for the root node
         // descendant nodes will receive their statistics and squared errors when forked by their parents
-        auto root_stats = _user_index.root_stats();
-        _root->_error2 = error2(root_stats);
+        auto root_stats = _user_index.root_stats(_user_biases);
+        _root->_error2 = error2_unbiased(root_stats);
         // root's bounds
         bound_map_t root_bounds;
         for(const auto &entry : _item_index)
@@ -229,10 +234,10 @@ struct BDTree{
                const unsigned depth_max,
                const std::size_t min_ratings){
         _log.node(node->_id, node->_level) << "Num. ratings: " << node->_num_ratings
-                                           << "\tSq.Error: " << node->_error2 << std::endl;
+                                           << "\tSq.Error (Unbiased): " << node->_error2 << std::endl;
 
         // check termination conditions on node's depth and number of ratings
-        if(node->_level == depth_max){
+        if(node->_level >= depth_max){
             _log.node(node->_id, node->_level) << "Maximum depth (" << depth_max << ") reached. STOP." << std::endl;
             return;
         }
@@ -276,7 +281,7 @@ struct BDTree{
         split(node, node_bounds, groups, group_stats, group_errors, depth_max, min_ratings);
     }
 
-    void fix_user_biases(){
+    void compute_biases(){
         for(auto &entry : _user_index){
             double bu{};
             // compute the bias for each user
@@ -285,14 +290,13 @@ struct BDTree{
             bu += _lambda * _global_mean;
             bu /= (entry.second.size() + _lambda);
             // then subtract the bias from each score of the user in the user_idx
-            for(auto &score : entry.second)
-                score._rating -= bu;
+//            for(auto &score : entry.second)
+//                score._rating -= bu;
             // store user biases for future predictions
             _user_biases[entry.first] = bu;
         }
     }
 
-    // computes the squared error given node's statistics
     static double error2(const stat_map_t &stat_map){
         double err2{};
         for(const auto &stats : stat_map){
@@ -302,6 +306,17 @@ struct BDTree{
         return err2;
     }
 
+    // computes the squared error given node's statistics
+    static double error2_unbiased(const stat_map_t &stat_map){
+        double err2{};
+        for(const auto &stats : stat_map){
+            const auto &s = stats.second;
+            if(s._n > 0)    err2 += s._sum2_unbiased - s._sum_unbiased * s._sum_unbiased / s._n;
+        }
+        return err2;
+    }
+
+
     double predict(const BDNode_cptr node, const std::size_t item_id) const{
         return node->predict(item_id);
     }
@@ -310,7 +325,9 @@ struct BDTree{
         for(const auto &s:stats){
             std::cout << "stats item "<< s.first << std::endl;
             std::cout << s.second._sum << " " <<
+                         s.second._sum_unbiased << " " <<
                          s.second._sum2 << " " <<
+                         s.second._sum2_unbiased << " " <<
                          s.second._n << std::endl;
         }
     }
@@ -368,18 +385,18 @@ struct BDTree{
         for(auto it_score = it_left; it_score < it_right; ++it_score){
             if(it_score->_rating >= 4){  // loved item
                 groups[0].push_back(it_score->_id);
-                 _user_index.update_stats(group_stats[0], it_score->_id);
+                 _user_index.update_stats(group_stats[0], it_score->_id, _user_biases.at(it_score->_id));
 
             }else{  // hated item
                 groups[1].push_back(it_score->_id);
-                _user_index.update_stats(group_stats[1], it_score->_id);
+                _user_index.update_stats(group_stats[1], it_score->_id, _user_biases.at(it_score->_id));
             }
         }
         unknown_stats(parent_stats, group_stats);
         //compute the split error
         double split_err2{};
         for(const auto &stats : group_stats){
-            double gerr2{error2(stats)};
+            double gerr2{error2_unbiased(stats)};
             group_errors.push_back(gerr2);
             split_err2 += gerr2;
         }
@@ -452,7 +469,9 @@ struct BDTree{
             const auto &item = it_stats[0]->first;
             const auto &item_stats = it_stats[0]->second;
             double sum = item_stats._sum;
+            double sum_unbiased = item_stats._sum_unbiased;
             double sum2 = item_stats._sum2;
+            double sum2_unbiased = item_stats._sum2_unbiased;
             int n = item_stats._n;
             // subtract groups' stats to get the value for the unknowns
             // note: iterators for groups start from 1 in it_current vector
@@ -461,12 +480,14 @@ struct BDTree{
                         && it_stats[gidx]->first == item){
                     const auto &g_item_stats = it_stats[gidx]->second;
                     sum -= g_item_stats._sum;
+                    sum_unbiased -= g_item_stats._sum_unbiased;
                     sum2 -= g_item_stats._sum2;
+                    sum2_unbiased -= g_item_stats._sum2_unbiased;
                     n -= g_item_stats._n;
                     ++it_stats[gidx];
                 }
             }
-            if(n>0) unknown_stats[item] = stats_t{sum, sum2, n};
+            if(n>0) unknown_stats[item] = stats_t{sum, sum_unbiased, sum2, sum2_unbiased, n};
             ++it_stats[0];
         }
         // append unknown stats to groups'
