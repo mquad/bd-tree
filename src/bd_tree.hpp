@@ -11,6 +11,8 @@
 #include <vector>
 #include <utility>
 #include <unordered_map>
+#include <omp.h>
+#include <parallel/algorithm>
 #include "../util/basic_log.hpp"
 
 constexpr bool almost_eq(double lhs, double rhs, double eps = 1e-12) {
@@ -161,10 +163,11 @@ struct BDTree{
     double _global_mean;
     double _lambda;
     double _h_smooth;
+    unsigned _num_threads;
 
-    BDTree(double lambda = 7, double h_smooth = 200):
+    BDTree(double lambda = 7, double h_smooth = 200, unsigned num_threads=1):
         _log{std::cout}, _item_index{}, _user_index{}, _root{nullptr}, _user_biases{}, _n_users{}, _n_items{},
-        _node_counter{}, _global_mean{}, _lambda{lambda}, _h_smooth{h_smooth}{}
+        _node_counter{}, _global_mean{}, _lambda{lambda}, _h_smooth{h_smooth}, _num_threads{num_threads}{}
 
 
     // builds the item and user indices given the training data
@@ -246,39 +249,107 @@ struct BDTree{
             return;
         }
 
+        BDIndex::key_t best_candidate{};
+        double min_err{std::numeric_limits<double>::max()};
         // lovers and haters groups
         // unknowns is implicitly determined by these two groups and the set of items associate to the node, so we don't store it explicitly
-        BDIndex::key_t best_candidate{};
-        std::vector<group_t> groups, c_groups;
-        std::vector<stat_map_t> group_stats, c_stats;
-        std::vector<double> group_errors, c_errors;
-        double min_err{std::numeric_limits<double>::max()};
+        if(_num_threads > 1){
+            //shared variables
+            std::vector<std::vector<group_t>> groups_sh(_num_threads);
+            std::vector<std::vector<stat_map_t>> group_stats_sh(_num_threads);
+            std::vector<std::vector<double>> group_errors_sh(_num_threads);
+            std::vector<std::pair<std::size_t, double>> min_errors_sh(_num_threads, std::make_pair(0u, std::numeric_limits<double>::max()));
 
-        // search for the item with the lowest splitting error
-        for(const auto &entry : _item_index){
-            c_groups.clear();
-            c_stats.clear();
-            c_errors.clear();
-            double split_err = splitting_error(entry.first, node_stats, node_bounds, c_groups, c_stats, c_errors);
-            if(split_err < min_err){
-                min_err = split_err;
-                best_candidate = entry.first;
-                groups.swap(c_groups);
-                group_stats.swap(c_stats);
-                group_errors.swap(c_errors);
+            std::vector<group_t> c_groups;
+            std::vector<stat_map_t> c_stats;
+            std::vector<double> c_errors;
+#pragma omp parallel private(c_groups, c_stats, c_errors)
+            {
+#pragma omp single
+                {
+                    for(auto it = _item_index.cbegin(); it != _item_index.cend(); ++it){
+#pragma omp task firstprivate(it)
+                        {
+                            unsigned thread_id = omp_get_thread_num();
+                            unsigned candidate = it->first;
+                            double split_err = splitting_error(candidate,
+                                                               node_stats,
+                                                               node_bounds,
+                                                               c_groups,
+                                                               c_stats,
+                                                               c_errors);
+                            if(split_err < min_errors_sh[thread_id].second){
+                                min_errors_sh[thread_id].first = candidate;
+                                min_errors_sh[thread_id].second = split_err;
+                                groups_sh[thread_id].swap(c_groups);
+                                group_stats_sh[thread_id].swap(c_stats);
+                                group_errors_sh[thread_id].swap(c_errors);
+                            }
+                        }
+                    }
+                }
             }
-        }
-        _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
-                                           << "\tSplitting sq.error: " << min_err << std::endl;
 
-        // check termination condition on error reduction
-        if(min_err >= node->_error2){
-            _log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
-            return;
+            auto it_best = std::min_element(min_errors_sh.cbegin(),
+                                         min_errors_sh.cend(),
+                                         [](const std::pair<std::size_t, double> &lhs, const std::pair<std::size_t,double> &rhs){
+                return lhs.second < rhs.second;
+            });
+            const auto best_candidate = it_best->first;
+            const auto min_err = it_best->second;
+            const auto best_th = std::distance(min_errors_sh.cbegin(), it_best);
+
+            _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
+                                               << "\tSplitting sq.error: " << min_err << std::endl;
+
+            // check termination condition on error reduction
+            if(min_err >= node->_error2){
+                _log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
+                return;
+            }
+            node->_splitter = best_candidate;
+            // split the node and perform the recursive call
+            split(node,
+                  node_bounds,
+                  groups_sh[best_th],
+                  group_stats_sh[best_th],
+                  group_errors_sh[best_th],
+                  depth_max,
+                  min_ratings);
+
+
+        }else{
+            std::vector<group_t> groups;
+            std::vector<stat_map_t> group_stats;
+            std::vector<double> group_errors;
+
+            std::vector<group_t> c_groups;
+            std::vector<stat_map_t> c_stats;
+            std::vector<double> c_errors;
+
+            // search for the item with the lowest splitting error
+            for(const auto &entry : _item_index){
+                double split_err = splitting_error(entry.first, node_stats, node_bounds, c_groups, c_stats, c_errors);
+                if(split_err < min_err){
+                    min_err = split_err;
+                    best_candidate = entry.first;
+                    groups.swap(c_groups);
+                    group_stats.swap(c_stats);
+                    group_errors.swap(c_errors);
+                }
+            }
+            _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
+                                               << "\tSplitting sq.error: " << min_err << std::endl;
+
+            // check termination condition on error reduction
+            if(min_err >= node->_error2){
+                _log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
+                return;
+            }
+            node->_splitter = best_candidate;
+            // split the node and perform the recursive call
+            split(node, node_bounds, groups, group_stats, group_errors, depth_max, min_ratings);
         }
-        node->_splitter = best_candidate;
-        // split the node and perform the recursive call
-        split(node, node_bounds, groups, group_stats, group_errors, depth_max, min_ratings);
     }
 
     void compute_biases(){
@@ -376,6 +447,9 @@ struct BDTree{
                            std::vector<group_t> &groups,
                            std::vector<stat_map_t> &group_stats,
                            std::vector<double> &group_errors){
+        groups.clear();
+        group_stats.clear();
+        group_errors.clear();
         groups.assign(2, group_t{});
         group_stats.assign(2, stat_map_t{});
 
