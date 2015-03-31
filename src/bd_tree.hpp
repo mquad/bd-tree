@@ -263,12 +263,12 @@ struct BDTree{
             std::vector<group_t> c_groups;
             std::vector<stat_map_t> c_stats;
             std::vector<double> c_errors;
-#pragma omp parallel private(c_groups, c_stats, c_errors) num_threads(_num_threads)
+#pragma omp parallel num_threads(_num_threads)
             {
 #pragma omp single
                 {
                     for(auto it = _item_index.cbegin(); it != _item_index.cend(); ++it){
-#pragma omp task firstprivate(it)
+#pragma omp task firstprivate(it) private(c_groups, c_stats, c_errors)
                         {
                             unsigned thread_id = omp_get_thread_num();
                             unsigned candidate = it->first;
