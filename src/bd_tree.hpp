@@ -123,8 +123,9 @@ struct BDTree{
         std::size_t _id;
         // index of the splitter associate with the node wrt to the item_index
         BDIndex::key_t _splitter;
-        double _error2;
+        double _error2_unbiased;
         unsigned _level;
+        std::size_t _num_users;
         std::size_t _num_ratings;
         // pointer to node's parent for hierarchial smoothing
         BDNode * _parent;
@@ -136,14 +137,14 @@ struct BDTree{
         std::unique_ptr<std::map<std::size_t, double>> _predictions;
 
         BDNode():
-            _id{}, _splitter{}, _error2{}, _num_ratings{}, _parent{nullptr}, _children{},
-            _predictions{nullptr}{}
+            _id{0}, _splitter{0}, _error2_unbiased{0},
+            _num_users{0}, _num_ratings{0},
+            _parent{nullptr}, _children{}, _predictions{nullptr}{}
 
         double predict(const std::size_t item_id) const{
             try{
                 return _predictions->at(item_id);
-            }catch(std::out_of_range &){
-//                std::cerr << "unable to compute prediction for item " << item_id << std::endl;
+            }catch(std::out_of_range &){ // new item
                 return .0;
             }
         }
@@ -189,6 +190,7 @@ struct BDTree{
         _root->_id = _node_counter++;
         _root->_level = 1u;
         _root->_num_ratings = training_data.size();
+        _root->_num_users = _n_users;
 
     }
 
@@ -196,7 +198,8 @@ struct BDTree{
         // compute statistics and squared error only for the root node
         // descendant nodes will receive their statistics and squared errors when forked by their parents
         auto root_stats = _user_index.root_stats(_user_biases);
-        _root->_error2 = error2_unbiased(root_stats);
+        std::cout << "Biased sq.err " <<  error2(root_stats) << std::endl;
+        _root->_error2_unbiased = error2_unbiased(root_stats);
         // root's bounds
         bound_map_t root_bounds;
         for(const auto &entry : _item_index)
@@ -237,7 +240,8 @@ struct BDTree{
                const unsigned depth_max,
                const std::size_t min_ratings){
         _log.node(node->_id, node->_level) << "Num. ratings: " << node->_num_ratings
-                                           << "\tSq.Error (Unbiased): " << node->_error2 << std::endl;
+                                           << "\tNum. users: " << node->_num_users
+                                           << "\tSq.Error (Unbiased): " << node->_error2_unbiased << std::endl;
 
         // check termination conditions on node's depth and number of ratings
         if(node->_level >= depth_max){
@@ -303,7 +307,7 @@ struct BDTree{
                                                << "\tSplitting sq.error: " << min_err << std::endl;
 
             // check termination condition on error reduction
-            if(min_err >= node->_error2){
+            if(min_err >= node->_error2_unbiased){
                 _log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
                 return;
             }
@@ -330,19 +334,24 @@ struct BDTree{
             // search for the item with the lowest splitting error
             for(const auto &entry : _item_index){
                 double split_err = splitting_error(entry.first, node_stats, node_bounds, c_groups, c_stats, c_errors);
+                std::cout << "Candidate " << entry.first
+                          << "\tSplit Err: " << split_err
+                          << "\tPop: " << c_groups[0].size() + c_groups[1].size();
                 if(split_err < min_err){
                     min_err = split_err;
                     best_candidate = entry.first;
                     groups.swap(c_groups);
                     group_stats.swap(c_stats);
                     group_errors.swap(c_errors);
+                    std::cout << "***";
                 }
+                std::cout << std::endl;
             }
             _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
                                                << "\tSplitting sq.error: " << min_err << std::endl;
 
             // check termination condition on error reduction
-            if(min_err >= node->_error2){
+            if(min_err >= node->_error2_unbiased){
                 _log.node(node->_id, node->_level) << "The error has not decreased. STOP." << std::endl;
                 return;
             }
@@ -361,8 +370,6 @@ struct BDTree{
             bu += _lambda * _global_mean;
             bu /= (entry.second.size() + _lambda);
             // then subtract the bias from each score of the user in the user_idx
-//            for(auto &score : entry.second)
-//                score._rating -= bu;
             // store user biases for future predictions
             _user_biases[entry.first] = bu;
         }
@@ -418,7 +425,8 @@ struct BDTree{
             child->_level = parent_node->_level + 1;
             child->_parent = parent_node;
             child->_num_ratings = 0u;
-            child->_error2 = group_errors[child_idx];
+            child->_error2_unbiased = group_errors[child_idx];
+            if(child_idx < groups.size()) child->_num_users = groups[child_idx].size();
             compute_predictions(child, group_stats[child_idx]);
             children.push_back(std::unique_ptr<BDNode>(child));
         }
@@ -433,6 +441,7 @@ struct BDTree{
                 children[gidx]->_num_ratings += g_bounds[gidx].size();
             }
         }
+
         //recursive call
         for(std::size_t child_idx{}; child_idx < children.size(); ++child_idx)
             gdt_r(children[child_idx].get(), group_stats[child_idx], child_bounds[child_idx], depth_max, alpha);
