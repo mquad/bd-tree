@@ -263,7 +263,7 @@ struct BDTree{
             std::vector<group_t> c_groups;
             std::vector<stat_map_t> c_stats;
             std::vector<double> c_errors;
-#pragma omp parallel private(c_groups, c_stats, c_errors)
+#pragma omp parallel private(c_groups, c_stats, c_errors) num_threads(_num_threads)
             {
 #pragma omp single
                 {
