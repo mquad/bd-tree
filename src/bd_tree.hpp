@@ -333,19 +333,24 @@ struct BDTree{
 
             // search for the item with the lowest splitting error
             for(const auto &entry : _item_index){
-                double split_err = splitting_error(entry.first, node_stats, node_bounds, c_groups, c_stats, c_errors);
-                std::cout << "Candidate " << entry.first
-                          << "\tSplit Err: " << split_err
-                          << "\tPop: " << c_groups[0].size() + c_groups[1].size();
+                double split_err = splitting_error(entry.first,
+                                                   node_stats,
+                                                   node_bounds,
+                                                   c_groups,
+                                                   c_stats,
+                                                   c_errors);
+//                std::cout << "Candidate " << entry.first
+//                          << "\tSplit Err: " << split_err
+//                          << "\tPop: " << c_groups[0].size() + c_groups[1].size();
                 if(split_err < min_err){
                     min_err = split_err;
                     best_candidate = entry.first;
                     groups.swap(c_groups);
                     group_stats.swap(c_stats);
                     group_errors.swap(c_errors);
-                    std::cout << "***";
+//                    std::cout << "***";
                 }
-                std::cout << std::endl;
+//                std::cout << std::endl;
             }
             _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
                                                << "\tSplitting sq.error: " << min_err << std::endl;
@@ -357,7 +362,13 @@ struct BDTree{
             }
             node->_splitter = best_candidate;
             // split the node and perform the recursive call
-            split(node, node_bounds, groups, group_stats, group_errors, depth_max, min_ratings);
+            split(node,
+                  node_bounds,
+                  groups,
+                  group_stats,
+                  group_errors,
+                  depth_max,
+                  min_ratings);
         }
     }
 
@@ -439,6 +450,7 @@ struct BDTree{
             for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
                 child_bounds[gidx][entry.first] = g_bounds[gidx];
                 children[gidx]->_num_ratings += g_bounds[gidx].size();
+                std::cout << gidx << ": " << children[gidx]->_num_ratings << std::endl;
             }
         }
 

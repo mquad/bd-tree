@@ -32,6 +32,7 @@ int main(int argc, char **argv)
 
 
     stopwatch sw;
+    sw.reset();
     sw.start();
     // build the decision tree
     BDTree bdtree{lambda, h_smoothing, num_threads};
