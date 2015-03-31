@@ -1,0 +1,6 @@
+*~
+*.user
+build/
+release/
+debug/
+data/

@@ -1,1 +1,0 @@
-g++   -std=c++11 -Wall -Wextra -pedantic -fopenmp -O3 -march=native -DNDEBUG    CMakeFiles/bd-tree.dir/main.cpp.o  -o bd-tree  -L/home/massimo/workspace/active_learning/bd-tree/release/third_party/src/googletest-build -rdynamic 
