@@ -155,11 +155,7 @@ struct BDTree{
             _parent{nullptr}, _children{}, _predictions{nullptr}{}
 
         double predict(const std::size_t item_id) const{
-            try{
                 return _predictions->at(item_id);
-            }catch(std::out_of_range &){ // new item
-                return .0;
-            }
         }
     };
     using BDNode_ptr = BDNode*;

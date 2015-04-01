@@ -28,29 +28,18 @@ double build_profiles(const std::string &filename, user_profiles_t &profiles){
     return sum / n;
 }
 
-std::unordered_map<std::size_t, double> compute_bu(const user_profiles_t &profiles, const double mu, const double lambda){
-    std::unordered_map<std::size_t, double> user_biases;
-    for(const auto &prof : profiles){
-        double sum{};
-        std::size_t n{};
-        for(const auto &score : prof.second){
-            sum += score.second;
-            ++n;
-        }
-        user_biases[prof.first] = (sum + lambda * mu) / (n + lambda);
-    }
-    return user_biases;
-}
-
-
 double rmse(const BDTree &bdtree, const profile_t &answers, const profile_t &test){
     double mse{};
-    std::size_t n{test.size()};
+    std::size_t n{0};
     const auto leaf = bdtree.traverse(answers);
     for(const auto &ans : test){
-        double pred_r = bdtree.predict(leaf, ans.first);
-        double actual_r = ans.second;
-        mse += std::pow(pred_r - actual_r, 2);
+        try{
+            double pred_r = bdtree.predict(leaf, ans.first);
+            double actual_r = ans.second;
+            mse += std::pow(pred_r - actual_r, 2);
+        }catch(std::out_of_range &){
+            std::cout << "unable to predict for item " << ans.first << std::endl;
+        }
     }
     return std::sqrt(mse / n);
 }
