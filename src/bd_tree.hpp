@@ -53,6 +53,11 @@ struct score_t{
     friend bool operator !=(const score_t &lhs, const score_t &rhs){
         return !(lhs == rhs);
     }
+    friend std::ostream &operator <<(std::ostream &os, const score_t &s){
+        os << "(" << s._id << ", " << s._rating << ")" << std::endl;
+        return os;
+    }
+
 };
 
 struct bound_t{
@@ -65,6 +70,10 @@ struct bound_t{
     }
     friend bool operator !=(const bound_t &lhs, const bound_t &rhs){
         return !(lhs == rhs);
+    }
+    friend std::ostream &operator <<(std::ostream &os, const bound_t &b){
+        os << "[" << b._left << ", " << b._right << ")" << std::endl;
+        return os;
     }
 };
 
@@ -421,6 +430,13 @@ struct BDTree{
         }
     }
 
+    template<typename It>
+    std::ostream& print_range(std::ostream & os, It begin, It end){
+        for(auto it = begin; it != end; ++it)
+            os << *it;
+        return os;
+    }
+
     void split(BDNode_ptr parent_node,
                const bound_map_t &parent_bounds,
                const std::vector<group_t> &groups,
@@ -441,16 +457,24 @@ struct BDTree{
             compute_predictions(child, group_stats[child_idx]);
             children.push_back(std::unique_ptr<BDNode>(child));
         }
+        for(const auto & group : groups){
+            std::cout << "Group: ";
+            print_range(std::cout, group.cbegin(), group.cend()) << std::endl;
+        }
         // compute children boundaries
         std::vector<bound_map_t> child_bounds{3};
         for(auto &entry : _item_index){
             auto it_left = entry.second.begin() + parent_bounds.at(entry.first)._left;
             auto it_right = entry.second.begin() + parent_bounds.at(entry.first)._right;
+            std::cout << "Original:" << std::endl;
+            print_range(std::cout, it_left, it_right) << std::endl;
             const auto g_bounds = sort_by_group(it_left, it_right, groups);
+            std::cout << "Sorted:" << std::endl;
+            print_range(std::cout, it_left, it_right) << std::endl;
             for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
                 child_bounds[gidx][entry.first] = g_bounds[gidx];
                 children[gidx]->_num_ratings += g_bounds[gidx].size();
-                std::cout << gidx << ": " << children[gidx]->_num_ratings << std::endl;
+                std::cout << gidx << ": " << g_bounds[gidx] << "->" << children[gidx]->_num_ratings << std::endl;
             }
         }
 
