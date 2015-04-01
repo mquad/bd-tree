@@ -54,7 +54,7 @@ struct score_t{
         return !(lhs == rhs);
     }
     friend std::ostream &operator <<(std::ostream &os, const score_t &s){
-        os << "(" << s._id << ", " << s._rating << ")" << std::endl;
+        os << "(" << s._id << ", " << s._rating << ")";
         return os;
     }
 
@@ -72,7 +72,7 @@ struct bound_t{
         return !(lhs == rhs);
     }
     friend std::ostream &operator <<(std::ostream &os, const bound_t &b){
-        os << "[" << b._left << ", " << b._right << ")" << std::endl;
+        os << "[" << b._left << ", " << b._right << ")";
         return os;
     }
 };
