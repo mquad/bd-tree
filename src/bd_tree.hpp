@@ -457,8 +457,6 @@ struct BDTree{
                const std::size_t depth_max,
                double alpha){
         auto &children = parent_node->_children;
-        for(const auto &g : groups)
-            assert(is_ordered(g.cbegin(), g.cend()));
 
         // fork children, one for each entry in group_stats
         for(std::size_t child_idx{}; child_idx < group_stats.size(); ++child_idx){
