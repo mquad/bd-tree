@@ -538,8 +538,6 @@ struct BDTree{
     template<typename It>
     std::vector<bound_t> sort_by_group(It left, It right, std::size_t start, const std::vector<group_t> &groups){
         assert(is_ordered(left, right));
-        for(const auto &g : groups)
-            assert(is_ordered(g.cbegin(), g.cend()));
         // store the sorted vector chunks in a temp vector (+1 for the unknowns)
         std::vector<std::vector<typename It::value_type>> chunks(groups.size()+1);
         // initialize iterators for each group
