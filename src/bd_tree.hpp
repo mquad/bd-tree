@@ -247,8 +247,8 @@ struct BDTree{
                const bound_map_t &node_bounds,
                const unsigned depth_max,
                const std::size_t min_ratings){
-        _log.node(node->_id, node->_level) << "Num. ratings: " << node->_num_ratings
-                                           << "\tNum. users: " << node->_num_users
+        _log.node(node->_id, node->_level) << "Num.ratings: " << node->_num_ratings
+                                           << "\tNum.users: " << node->_num_users
                                            << "\tSq.Error (Unbiased): " << node->_error2_unbiased << std::endl;
 
         // check termination conditions on node's depth and number of ratings
@@ -312,7 +312,8 @@ struct BDTree{
             const auto best_th = std::distance(min_errors_sh.cbegin(), it_best);
 
             _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
-                                               << "\tSplitting sq.error: " << min_err << std::endl;
+                                               << "\tSplitting sq.error: " << min_err
+                                               << "\tPop.: " << _item_index.at(best_candidate).size() << std::endl;
 
 
             // check termination condition on error reduction
@@ -472,10 +473,6 @@ struct BDTree{
         for(auto &entry : _item_index){
             auto it_left = entry.second.begin() + parent_bounds.at(entry.first)._left;
             auto it_right = entry.second.begin() + parent_bounds.at(entry.first)._right;
-            if(!is_ordered(it_left, it_right)){
-                std::cout << entry.first << std::endl;
-                print_range(std::cout, it_left, it_right);
-            }
             const auto g_bounds = sort_by_group(it_left, it_right, parent_bounds.at(entry.first)._left, groups);
             for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
                 child_bounds[gidx][entry.first] = g_bounds[gidx];

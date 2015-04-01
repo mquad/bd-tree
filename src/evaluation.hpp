@@ -37,6 +37,7 @@ double rmse(const BDTree &bdtree, const profile_t &answers, const profile_t &tes
             double pred_r = bdtree.predict(leaf, ans.first);
             double actual_r = ans.second;
             mse += std::pow(pred_r - actual_r, 2);
+            ++n;
         }catch(std::out_of_range &){
             std::cout << "unable to predict for item " << ans.first << std::endl;
         }
