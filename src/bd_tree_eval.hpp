@@ -29,7 +29,7 @@ double build_profiles(const std::string &filename, user_profiles_t &profiles){
 }
 
 double rmse(const BDTree &bdtree, const profile_t &answers, const profile_t &test){
-    double mse{};
+    double mse{0};
     std::size_t n{0};
     const auto leaf = bdtree.traverse(answers);
     for(const auto &ans : test){
@@ -39,7 +39,7 @@ double rmse(const BDTree &bdtree, const profile_t &answers, const profile_t &tes
             mse += std::pow(pred_r - actual_r, 2);
             ++n;
         }catch(std::out_of_range &){
-            std::cout << "unable to predict for item " << ans.first << std::endl;
+            std::cout << "unable to make predictions for item " << ans.first << std::endl;
         }
     }
     return std::sqrt(mse / n);
@@ -51,6 +51,8 @@ double evaluate(const BDTree &bdtree,
                 double (*metric)(const BDTree&, const profile_t&, const profile_t&)){
     double metric_sum{};
     std::size_t n{query.size()};
+    std::cout << "EVALUATION" << std::endl;
+    std::cout << "Num.users: " << query.size() << std::endl;
     for(const auto &ans : query){
         if(test.count(ans.first) > 0)
             metric_sum += metric(bdtree, ans.second, test.at(ans.first));
