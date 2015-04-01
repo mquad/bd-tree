@@ -30,6 +30,15 @@ std::vector<rating_t> build_training_data(){
     };
 }
 
+TEST(BDTreeTest, ScoreTTest){
+    EXPECT_TRUE(score_t(1,2) < score_t(2,3));
+    EXPECT_TRUE(score_t(1,2) < score_t(2,1));
+    EXPECT_TRUE(score_t(1,2) < score_t(1,3));
+    EXPECT_FALSE(score_t(1,2) < score_t(1,1));
+    EXPECT_FALSE(score_t(2,2) < score_t(2,1));
+    EXPECT_FALSE(score_t(2,2) < score_t(2,2));
+}
+
 TEST(BDTreeTest, IndexTest){
     size_t n_users{11}, n_items{7};
     BDTree bdtree{0, 0};
@@ -144,6 +153,7 @@ TEST(BDTreeTest, SortingTest){
     auto prev_size = item_3_entry.size();
     auto bounds = bdtree.sort_by_group(item_3_entry.begin(),
             item_3_entry.end(),
+            0u,
             groups);
     EXPECT_EQ(prev_size, item_3_entry.size());
     EXPECT_EQ(score_t(0,5), item_3_entry[0]);

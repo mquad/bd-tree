@@ -1,6 +1,7 @@
 #ifndef BDTREE_HPP
 #define BDTREE_HPP
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -57,6 +58,10 @@ struct score_t{
         os << "(" << s._id << ", " << s._rating << ")";
         return os;
     }
+    friend bool operator< (const score_t &lhs, const score_t &rhs){
+        return lhs._id < rhs._id ||
+                (lhs._id == rhs._id && lhs._rating < rhs._rating);
+    }
 
 };
 
@@ -100,9 +105,8 @@ struct BDIndex{
     decltype(_index.cbegin()) cbegin() const    {return _index.cbegin();}
     decltype(_index.cend()) cend() const        {return _index.cend();}
 
-    // add a new score to the index
-    void add_score(const key_t &key, const score_t &score){
-        _index[key].push_back(score);
+    void insert_sorted(const key_t &key, const score_t &score){
+        _index[key].insert(std::lower_bound(_index[key].cbegin(), _index[key].cend(), score), score);
     }
 
     stat_map_t root_stats(const std::unordered_map<std::size_t, double> &user_biases) const{
@@ -183,8 +187,8 @@ struct BDTree{
     // builds the item and user indices given the training data
     void init(const std::vector<rating_t> &training_data){
         for(const auto &rat : training_data){
-            _item_index.add_score(rat._item_id, score_t(rat._user_id, rat._value));
-            _user_index.add_score(rat._user_id, score_t(rat._item_id, rat._value));
+            _item_index.insert_sorted(rat._item_id, score_t(rat._user_id, rat._value));
+            _user_index.insert_sorted(rat._user_id, score_t(rat._item_id, rat._value));
             _global_mean += rat._value;
         }
         _global_mean /= training_data.size();
@@ -207,7 +211,6 @@ struct BDTree{
         // compute statistics and squared error only for the root node
         // descendant nodes will receive their statistics and squared errors when forked by their parents
         auto root_stats = _user_index.root_stats(_user_biases);
-        std::cout << "Biased sq.err " <<  error2(root_stats) << std::endl;
         _root->_error2_unbiased = error2_unbiased(root_stats);
         // root's bounds
         bound_map_t root_bounds;
@@ -314,6 +317,7 @@ struct BDTree{
 
             _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
                                                << "\tSplitting sq.error: " << min_err << std::endl;
+
 
             // check termination condition on error reduction
             if(min_err >= node->_error2_unbiased){
@@ -437,6 +441,14 @@ struct BDTree{
         return os;
     }
 
+    template<typename It>
+    bool is_ordered(It begin, It end){
+        if(std::distance(begin, end) == 0) return true;
+        for(auto it = begin; it != end-1; ++it)
+            if(!(*it < *(it+1) || *it == *(it+1))) return false;
+        return true;
+    }
+
     void split(BDNode_ptr parent_node,
                const bound_map_t &parent_bounds,
                const std::vector<group_t> &groups,
@@ -445,6 +457,9 @@ struct BDTree{
                const std::size_t depth_max,
                double alpha){
         auto &children = parent_node->_children;
+        for(const auto &g : groups)
+            assert(is_ordered(g.cbegin(), g.cend()));
+
         // fork children, one for each entry in group_stats
         for(std::size_t child_idx{}; child_idx < group_stats.size(); ++child_idx){
             BDNode_ptr child = new BDNode;
@@ -457,24 +472,20 @@ struct BDTree{
             compute_predictions(child, group_stats[child_idx]);
             children.push_back(std::unique_ptr<BDNode>(child));
         }
-        for(const auto & group : groups){
-            std::cout << "Group: ";
-            print_range(std::cout, group.cbegin(), group.cend()) << std::endl;
-        }
+
         // compute children boundaries
         std::vector<bound_map_t> child_bounds{3};
         for(auto &entry : _item_index){
             auto it_left = entry.second.begin() + parent_bounds.at(entry.first)._left;
             auto it_right = entry.second.begin() + parent_bounds.at(entry.first)._right;
-            std::cout << "Original:" << std::endl;
-            print_range(std::cout, it_left, it_right) << std::endl;
-            const auto g_bounds = sort_by_group(it_left, it_right, groups);
-            std::cout << "Sorted:" << std::endl;
-            print_range(std::cout, it_left, it_right) << std::endl;
+            if(!is_ordered(it_left, it_right)){
+                std::cout << entry.first << std::endl;
+                print_range(std::cout, it_left, it_right);
+            }
+            const auto g_bounds = sort_by_group(it_left, it_right, parent_bounds.at(entry.first)._left, groups);
             for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
                 child_bounds[gidx][entry.first] = g_bounds[gidx];
                 children[gidx]->_num_ratings += g_bounds[gidx].size();
-                std::cout << gidx << ": " << g_bounds[gidx] << "->" << children[gidx]->_num_ratings << std::endl;
             }
         }
 
@@ -524,9 +535,13 @@ struct BDTree{
 
 
     // takes a range of a container of (id, rating) values
-    // pre: elements in the range [left, right) must be sorted by "id"
+    // pre: elements in the range [left, right) must be sorted by "id" asc
+    // pre: vectors in groups must be sorted in asc ordere
     template<typename It>
-    std::vector<bound_t> sort_by_group(It left, It right, const std::vector<group_t> &groups){
+    std::vector<bound_t> sort_by_group(It left, It right, std::size_t start, const std::vector<group_t> &groups){
+        assert(is_ordered(left, right));
+        for(const auto &g : groups)
+            assert(is_ordered(g.cbegin(), g.cend()));
         // store the sorted vector chunks in a temp vector (+1 for the unknowns)
         std::vector<std::vector<typename It::value_type>> chunks(groups.size()+1);
         // initialize iterators for each group
@@ -550,10 +565,12 @@ struct BDTree{
         }
         // recompose the range, now ordered, and generate the bounds wrt the item index
         std::vector<bound_t> bounds;
-        std::size_t start{};
+        auto it_start = left;
         for(const auto &chunk : chunks){
-            std::copy(chunk.cbegin(), chunk.cend(), left + start);
+            std::copy(chunk.cbegin(), chunk.cend(), it_start);
             bounds.push_back(bound_t(start, start + chunk.size()));
+            assert(is_ordered(it_start, it_start + chunk.size()));
+            it_start += chunk.size();
             start += chunk.size();
         }
         return bounds;
