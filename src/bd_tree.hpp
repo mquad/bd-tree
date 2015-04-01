@@ -313,7 +313,7 @@ struct BDTree{
 
             _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
                                                << "\tSplitting sq.error: " << min_err
-                                               << "\tPop.: " << _item_index.at(best_candidate).size() << std::endl;
+                                               << "\tPop.: " << node_stats.at(best_candidate)._n << std::endl;
 
 
             // check termination condition on error reduction
@@ -349,9 +349,6 @@ struct BDTree{
                                                    c_groups,
                                                    c_stats,
                                                    c_errors);
-//                std::cout << "Candidate " << entry.first
-//                          << "\tSplit Err: " << split_err
-//                          << "\tPop: " << c_groups[0].size() + c_groups[1].size();
                 if(split_err < min_err){
                     min_err = split_err;
                     best_candidate = entry.first;
@@ -456,6 +453,7 @@ struct BDTree{
         auto &children = parent_node->_children;
 
         // fork children, one for each entry in group_stats
+        std::size_t u_num_users = parent_node->_num_users;
         for(std::size_t child_idx{}; child_idx < group_stats.size(); ++child_idx){
             BDNode_ptr child = new BDNode;
             child->_id = _node_counter++;
@@ -464,9 +462,11 @@ struct BDTree{
             child->_num_ratings = 0u;
             child->_error2_unbiased = group_errors[child_idx];
             if(child_idx < groups.size()) child->_num_users = groups[child_idx].size();
+            u_num_users -= child->_num_users;
             compute_predictions(child, group_stats[child_idx]);
             children.push_back(std::unique_ptr<BDNode>(child));
         }
+        children[children.size()-1]->_num_users = u_num_users;
 
         // compute children boundaries
         std::vector<bound_map_t> child_bounds{3};
