@@ -433,7 +433,7 @@ struct BDTree{
     template<typename It>
     std::ostream& print_range(std::ostream & os, It begin, It end){
         for(auto it = begin; it != end; ++it)
-            os << *it;
+            os << *it << "\t";
         return os;
     }
 
