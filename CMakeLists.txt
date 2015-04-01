@@ -13,6 +13,9 @@ include_directories(${source_dir}/include)
 ExternalProject_Get_Property(googletest binary_dir)
 link_directories(${binary_dir})
 
+find_package(Boost COMPONENTS iostreams REQUIRED)
+include_directories(${Boost_INCLUDE_DIR})
+
 
 #configure the compiler
 set (CMAKE_CXX_COMPILER "g++")

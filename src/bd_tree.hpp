@@ -14,7 +14,9 @@
 #include <unordered_map>
 #include <omp.h>
 #include <parallel/algorithm>
+#include <boost/fusion/adapted.hpp>
 #include "../util/basic_log.hpp"
+
 
 constexpr bool almost_eq(double lhs, double rhs, double eps = 1e-12) {
     return std::abs(lhs - rhs) < eps;
@@ -26,13 +28,20 @@ struct rating_t{
     double _value;
     rating_t(const std::size_t user_id, const std::size_t item_id, double value):
         _user_id{user_id}, _item_id{item_id}, _value{value}{}
+    rating_t() : _user_id{0}, _item_id{0}, _value{.0}{}
     rating_t(const std::string &rating_str){
         std::istringstream iss(rating_str);
         iss >> _user_id;
         iss >> _item_id;
         iss >> _value;
     }
+    friend std::ostream &operator <<(std::ostream &os, const rating_t &t){
+        os << "(" << t._user_id << ", " << t._item_id << "," << t._value << ")";
+        return os;
+    }
+
 };
+BOOST_FUSION_ADAPT_STRUCT(rating_t, (std::size_t, _user_id)(std::size_t, _item_id)(double, _value))
 
 struct stats_t{
     double _sum, _sum_unbiased;
@@ -105,8 +114,16 @@ struct BDIndex{
     decltype(_index.cbegin()) cbegin() const    {return _index.cbegin();}
     decltype(_index.cend()) cend() const        {return _index.cend();}
 
-    void insert_sorted(const key_t &key, const score_t &score){
-        _index[key].insert(std::lower_bound(_index[key].cbegin(), _index[key].cend(), score), score);
+    void insert(const key_t &key, const score_t &score){
+        _index[key].push_back(score);
+    }
+
+    void sort_all(){
+        for(auto &entry : _index)   sort_entry(entry.first);
+    }
+
+    void sort_entry(const key_t &key){
+        std::stable_sort(_index.at(key).begin(), _index.at(key).end());
     }
 
     stat_map_t root_stats(const std::unordered_map<std::size_t, double> &user_biases) const{
@@ -183,10 +200,12 @@ struct BDTree{
     // builds the item and user indices given the training data
     void init(const std::vector<rating_t> &training_data){
         for(const auto &rat : training_data){
-            _item_index.insert_sorted(rat._item_id, score_t(rat._user_id, rat._value));
-            _user_index.insert_sorted(rat._user_id, score_t(rat._item_id, rat._value));
+            _item_index.insert(rat._item_id, score_t(rat._user_id, rat._value));
+            _user_index.insert(rat._user_id, score_t(rat._item_id, rat._value));
             _global_mean += rat._value;
         }
+        _item_index.sort_all();
+        _user_index.sort_all();
         _global_mean /= training_data.size();
         _n_items = _item_index.size();
         _n_users = _user_index.size();
