@@ -71,15 +71,15 @@ struct bound_t{
     }
 };
 
-using stat_map_t = std::map<std::size_t, stats_t>;
-using bound_map_t = std::map<std::size_t, bound_t>;
+using stat_map_t = std::unordered_map<std::size_t, stats_t>;
+using bound_map_t = std::unordered_map<std::size_t, bound_t>;
 using profile_t = std::unordered_map<std::size_t, double>;
 
 struct BDIndex{
     using key_t = std::size_t;
     using entry_t = std::vector<score_t>;
 
-    std::unordered_map<key_t, entry_t> _index;
+    std::map<key_t, entry_t> _index;
 
     BDIndex() : _index{}{}
 
@@ -580,7 +580,7 @@ struct BDTree{
     }
 
     void unknown_stats(const stat_map_t &node_stats, std::vector<stat_map_t> &group_stats){
-        stat_map_t unknown_stats{};
+        group_stats.emplace_back(stat_map_t{});
         // initialize the pointers to the current element for each stats
         std::vector<stat_map_t::const_iterator> it_stats;
         it_stats.push_back(node_stats.cbegin());
@@ -611,11 +611,9 @@ struct BDTree{
                     ++it_stats[gidx];
                 }
             }
-            if(n>0) unknown_stats[item] = stats_t{sum, sum_unbiased, sum2, sum2_unbiased, n};
+            if(n>0) group_stats[group_stats.size()-1].emplace(item, stats_t{sum, sum_unbiased, sum2, sum2_unbiased, n});
             ++it_stats[0];
         }
-        // append unknown stats to groups'
-        group_stats.push_back(unknown_stats);
     }
 
 };
