@@ -79,7 +79,7 @@ struct BDIndex{
     using key_t = std::size_t;
     using entry_t = std::vector<score_t>;
 
-    std::map<key_t, entry_t> _index;
+    std::unordered_map<key_t, entry_t> _index;
 
     BDIndex() : _index{}{}
 
