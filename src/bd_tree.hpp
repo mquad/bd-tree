@@ -14,34 +14,14 @@
 #include <unordered_map>
 #include <omp.h>
 #include <parallel/algorithm>
-#include <boost/fusion/adapted.hpp>
 #include "../util/basic_log.hpp"
+#include "types.hpp"
 
 
 constexpr bool almost_eq(double lhs, double rhs, double eps = 1e-12) {
     return std::abs(lhs - rhs) < eps;
 }
 
-struct rating_t{
-    std::size_t _user_id;
-    std::size_t _item_id;
-    double _value;
-    rating_t(const std::size_t user_id, const std::size_t item_id, double value):
-        _user_id{user_id}, _item_id{item_id}, _value{value}{}
-    rating_t() : _user_id{0}, _item_id{0}, _value{.0}{}
-    rating_t(const std::string &rating_str){
-        std::istringstream iss(rating_str);
-        iss >> _user_id;
-        iss >> _item_id;
-        iss >> _value;
-    }
-    friend std::ostream &operator <<(std::ostream &os, const rating_t &t){
-        os << "(" << t._user_id << ", " << t._item_id << "," << t._value << ")";
-        return os;
-    }
-
-};
-BOOST_FUSION_ADAPT_STRUCT(rating_t, (std::size_t, _user_id)(std::size_t, _item_id)(double, _value))
 
 struct stats_t{
     double _sum, _sum_unbiased;
@@ -171,7 +151,7 @@ struct BDTree{
             _num_users{0}, _num_ratings{0},
             _parent{nullptr}, _children{}, _predictions{nullptr}{}
 
-        double predict(const std::size_t item_id) const{
+        double prediction(const std::size_t item_id) const{
                 return _predictions->at(item_id);
         }
     };
@@ -433,7 +413,7 @@ struct BDTree{
 
 
     double predict(const BDNode_cptr node, const std::size_t item_id) const{
-        return node->predict(item_id);
+        return node->prediction(item_id);
     }
 
     static void print_stats(const stat_map_t &stats){

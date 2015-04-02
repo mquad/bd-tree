@@ -19,13 +19,13 @@ std::vector<rating_t> import(const std::string &filename){
     return ratings;
 }
 
-std::vector<rating_t> import2(const std::string &filename, const std::size_t &size_hint=1000000){
+std::vector<rating_t> import2(const std::string &filename, const std::size_t sz_hint=1000000){
     boost::iostreams::mapped_file mmap(filename, boost::iostreams::mapped_file::readonly);
     auto f = mmap.const_data();
     auto l = f + mmap.size();
 
     std::vector<rating_t> ratings;
-    ratings.reserve(size_hint);
+    ratings.reserve(sz_hint);
     bool ok = qi::phrase_parse(f,l,(qi::ulong_long > qi::ulong_long > qi::double_) % qi::eol, qi::blank, ratings);
     if (ok)
         std::cout << "parse success\n";
