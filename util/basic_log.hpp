@@ -8,6 +8,10 @@ public:
     BasicLogger(std::ostream &os){
         out = &os;
     }
+    std::ostream &log(){
+        return *out;
+    }
+
     std::ostream &node(const std::size_t node_id, const std::size_t node_level=0u){
         for(std::size_t l{}; l < node_level-1; ++l)
             (*out) << "\t";

@@ -1,37 +1,226 @@
 #ifndef D_TREE_HPP
 #define D_TREE_HPP
-
+#include <boost/spirit/include/qi.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
+#include <limits>
+#include <memory>
+#include <random>
+#include <stdexcept>
 #include "types.hpp"
+#include "stats.hpp"
+#include "../util/basic_log.hpp"
 
-class DNode{
-public:
-    DNode() :
-        _parent{nullptr}, _children{}, _id{0u}, _splitter_id{0u}, _level{0u}{}
-    virtual double prediction(std::size_t _item_id) const = 0;
-protected:
-    DNode *_parent;
-    std::vector<std::unique_ptr<BDNode>> _children;
-    std::size_t _id;
-    std::size_t _splitter_id;
-    unsigned _level;
+namespace qi = boost::spirit::qi;
 
-};
-
+template<typename N>
 class DTree{
 public:
-    using ptr_t = DNode*;
-    using cptr_t = DNode const*;
+    using node_ptr_t = N*;
+    using node_cptr_t = N const*;
+    using id_t = typename N::id_t;
+    using stat_map_t = typename N::stat_map_t;
 
 public:
-    virtual void build() = 0;
-    virtual void init(const std::vector<rating_t> &) = 0;
-    virtual void init(const std::string &) = 0;
-    virtual double splitting_error() const = 0;
-    virtual cptr_t traverse(const profile_t &) const = 0;
+    DTree(const unsigned depth_max,
+          const unsigned num_threads = 1,
+          const bool randomize = false,
+          const double rand_coeff = 10,
+          const BasicLogger &log = BasicLogger{std::cout}):
+        _root{nullptr}, _mt{nullptr},
+        _depth_max{depth_max}, _num_threads{num_threads}, _randomize{randomize}, _rand_coeff{rand_coeff},
+        _log{log}{}
+
+    void gdt_r(node_ptr_t node);
+    void init(const std::string &training_filename,
+              const std::size_t sz_hint = 1000000);
 
 protected:
-    ptr_t *_root;
+    void find_splitter(const node_cptr_t node,
+                       id_t &splitter,
+                       double &quality,
+                       std::vector<group_t> &groups,
+                       std::vector<double> &g_qualities,
+                       std::vector<stat_map_t> &g_stats);
+    void rnd_init(){
+        std::random_device rd;
+        _mt = std::unique_ptr<std::mt19937>(new std::mt19937(rd()));
+    }
+
+public:
+    virtual ~DTree(){}
+    virtual void build() = 0;
+    virtual void init(const std::vector<rating_t> &training_data) = 0;
+    virtual void split(node_ptr_t node,
+                       const id_t splitter_id,
+                       const double splitter_quality,
+                       std::vector<group_t> &groups,
+                       std::vector<double> &g_qualities,
+                       std::vector<stat_map_t> &g_stats) = 0;
+    virtual double split_quality(const node_cptr_t node,
+                                 const id_t splitter_id,
+                                 std::vector<group_t> &groups,
+                                 std::vector<double> &g_qualities,
+                                 std::vector<stat_map_t> &g_stats) const = 0;
+
+    virtual node_cptr_t traverse(const profile_t &answers) const = 0;
+
+protected:
+    std::unique_ptr<N> _root;
+    std::unique_ptr<std::mt19937> _mt;
+    unsigned _depth_max;
+    unsigned _num_threads;
+    bool _randomize;
+    double _rand_coeff;
+    BasicLogger _log;
 
 };
+
+template<typename N>
+void DTree<N>::init(const std::string &training_filename, const std::size_t sz_hint){
+    boost::iostreams::mapped_file mmap(training_filename, boost::iostreams::mapped_file::readonly);
+    auto f = mmap.const_data();
+    auto l = f + mmap.size();
+
+    std::vector<rating_t> ratings;
+    ratings.reserve(sz_hint);
+    if(!qi::phrase_parse(f,l,(qi::ulong_long > qi::ulong_long > qi::double_) % qi::eol, qi::blank, ratings))
+        throw std::runtime_error ("Unable to parse the training file.");
+
+    init(ratings);
+}
+
+template<typename N>
+void DTree<N>::gdt_r(node_ptr_t node){
+    // check termination condition on node's level
+    if(node->_level >= _depth_max){
+        _log.node(node->_id, node->_level) << "Maximum depth (" << _depth_max << ") reached. STOP." << std::endl;
+        return;
+    }
+    id_t splitter{};
+    double quality{};
+    std::vector<group_t> groups{};
+    std::vector<double> g_qualities{};
+    std::vector<stat_map_t> g_stats{};
+
+    find_splitter(node, splitter, quality, groups, g_qualities, g_stats);
+
+    _log.node(node->_id, node->_level) << "Best candidate: " << splitter
+                                       << "\tQuality: " << quality << std::endl;
+
+    if(quality <= node->_quality){
+        _log.node(node->_id, node->_level) << "The quality after split will not increase. STOP." << std::endl;
+        return;
+    }
+    split(node, splitter, quality, groups, g_qualities, g_stats);
+}
+
+template<typename N>
+void DTree<N>::find_splitter(const node_cptr_t node,
+                             id_t &splitter,
+                             double &quality,
+                             std::vector<group_t> &groups,
+                             std::vector<double> &g_qualities,
+                             std::vector<stat_map_t> &g_stats){
+    const auto &candidates = node->candidates();
+    if(!_randomize){    // pick the best quality candidate
+        std::vector<std::vector<group_t>> cand_groups{_num_threads};
+        std::vector<std::vector<double>> cand_g_qualities{_num_threads};
+        std::vector<std::vector<stat_map_t>> cand_g_stats{_num_threads};
+        std::vector<std::pair<id_t, double>> cand_best_qualities{_num_threads, std::make_pair(id_t{},
+                                                                                         std::numeric_limits<double>::lowest())};
+
+        std::vector<group_t> c_groups;
+        std::vector<double> c_qualities;
+        std::vector<stat_map_t> c_stats;
+
+        // compute the qualiy of each candidate in parallel
+    #pragma omp parallel num_threads(_num_threads)
+        {
+    #pragma omp single
+            {
+                for(auto it_cand = candidates.cbegin(); it_cand != candidates.cend(); ++it_cand){
+    #pragma omp task firstprivate(it_cand) private(c_groups, c_qualities, c_stats)
+                    {
+                        unsigned thread_id = omp_get_thread_num();
+                        double cand_quality = split_quality(node,
+                                                            *it_cand,
+                                                            c_groups,
+                                                            c_qualities,
+                                                            c_stats);
+                        if(cand_quality > cand_best_qualities[thread_id].second){
+                            cand_best_qualities[thread_id].first = *it_cand;
+                            cand_best_qualities[thread_id].second = cand_quality;
+                            cand_groups[thread_id].swap(c_groups);
+                            cand_g_qualities[thread_id].swap(c_qualities);
+                            cand_g_stats[thread_id].swap(c_stats);
+                        }
+                    }
+                }
+            }
+        }
+
+        auto it_best = cand_best_qualities.cbegin();
+        for(auto it = cand_best_qualities.cbegin()+1; it != cand_best_qualities.cend(); ++it){
+            if(it->second > it_best->second)  it_best = it;
+        }
+
+        const auto best_thread = std::distance(cand_best_qualities.cbegin(), it_best);
+        splitter = it_best->first;
+        quality = it_best->second;
+        groups.swap(cand_groups[best_thread]);
+        g_qualities.swap(cand_g_qualities[best_thread]);
+        g_stats.swap(cand_g_stats[best_thread]);
+    }else{  // pick a candidate with probability proportianal to his enhancement in quality
+        //TODO: too much memory demanding -> store just the more promising candidates
+        std::vector<std::vector<group_t>> cand_groups{candidates.size()};
+        std::vector<std::vector<double>> cand_g_qualities{candidates.size()};
+        std::vector<std::vector<stat_map_t>> cand_g_stats{candidates.size()};
+        std::vector<std::pair<id_t, double>> cand_qualities{candidates.size(), std::make_pair(id_t{}, .0)};
+
+        // compute the qualiy of each candidate in parallel
+    #pragma omp parallel num_threads(_num_threads)
+        {
+    #pragma omp single
+            {
+                for(auto it_cand = candidates.cbegin(); it_cand != candidates.cend(); ++it_cand){
+    #pragma omp task firstprivate(it_cand)
+                    {
+                        const auto cand_idx = std::distance(candidates.cbegin(), it_cand);
+                        cand_qualities[cand_idx] =
+                                std::make_pair(*it_cand,
+                                               split_quality(node,
+                                                             *it_cand,
+                                                             cand_groups[cand_idx],
+                                                             cand_g_qualities[cand_idx],
+                                                             cand_g_stats[cand_idx]));
+                    }
+                }
+            }
+        }
+
+        std::vector<double> cum_probs;
+        cum_probs.reserve(candidates.size());
+        // compute the probabilies for each node
+        for(auto it_qual = cand_qualities.cbegin(); it_qual != cand_qualities.cend(); ++it_qual){
+            double prob = std::pow(std::max(.0, it_qual->second - node->_quality), _rand_coeff);
+            if(std::distance(cand_qualities.cbegin(), it_qual) > 0)
+                cum_probs.push_back(cum_probs.back() + prob);
+            else
+                cum_probs.push_back(prob);
+        }
+        //pick an element at random
+        if(_mt == nullptr) rnd_init();
+        std::uniform_real_distribution<double> rnd(0, cum_probs.back());
+        double p = rnd(*_mt);
+        auto it_prob = cum_probs.cbegin();
+        while(*it_prob <= p) ++it_prob;
+        const auto &chosen = cand_qualities.at(std::distance(cum_probs.cbegin(), it_prob));
+        splitter = chosen.first;
+        quality = chosen.second;
+        groups.swap(cand_groups[splitter]);
+        g_qualities.swap(cand_g_qualities[splitter]);
+        g_stats.swap(cand_g_stats[splitter]);
+    }
+}
 
 #endif // D_TREE_HPP

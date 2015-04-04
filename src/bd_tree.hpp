@@ -13,7 +13,6 @@
 #include <utility>
 #include <unordered_map>
 #include <omp.h>
-#include <parallel/algorithm>
 #include "../util/basic_log.hpp"
 #include "types.hpp"
 
@@ -32,22 +31,22 @@ struct stats_t{
     stats_t() : stats_t{.0, .0, .0, .0, 0}{}
 };
 
-struct score_t{
+struct ScoreUnbiased{
     std::size_t _id;
     double _rating;
-    score_t(std::size_t id, double rating) : _id{id}, _rating{rating}{}
-    score_t() : score_t(0u, .0){}
-    friend bool operator ==(const score_t &lhs, const score_t &rhs){
+    ScoreUnbiased(std::size_t id, double rating) : _id{id}, _rating{rating}{}
+    ScoreUnbiased() : ScoreUnbiased(0u, .0){}
+    friend bool operator ==(const ScoreUnbiased &lhs, const ScoreUnbiased &rhs){
         return (lhs._id == rhs._id) && (almost_eq(lhs._rating, rhs._rating));
     }
-    friend bool operator !=(const score_t &lhs, const score_t &rhs){
+    friend bool operator !=(const ScoreUnbiased &lhs, const ScoreUnbiased &rhs){
         return !(lhs == rhs);
     }
-    friend std::ostream &operator <<(std::ostream &os, const score_t &s){
+    friend std::ostream &operator <<(std::ostream &os, const ScoreUnbiased &s){
         os << "(" << s._id << ", " << s._rating << ")";
         return os;
     }
-    friend bool operator< (const score_t &lhs, const score_t &rhs){
+    friend bool operator< (const ScoreUnbiased &lhs, const ScoreUnbiased &rhs){
         return lhs._id < rhs._id ||
                 (lhs._id == rhs._id && lhs._rating < rhs._rating);
     }
@@ -71,13 +70,13 @@ struct bound_t{
     }
 };
 
-using stat_map_t = std::unordered_map<std::size_t, stats_t>;
+using stat_map_t = std::map<std::size_t, stats_t>;
 using bound_map_t = std::unordered_map<std::size_t, bound_t>;
-using profile_t = std::unordered_map<std::size_t, double>;
+//using profile_t = std::unordered_map<std::size_t, double>;
 
 struct BDIndex{
     using key_t = std::size_t;
-    using entry_t = std::vector<score_t>;
+    using entry_t = std::vector<ScoreUnbiased>;
 
     std::map<key_t, entry_t> _index;
 
@@ -94,7 +93,7 @@ struct BDIndex{
     decltype(_index.cbegin()) cbegin() const    {return _index.cbegin();}
     decltype(_index.cend()) cend() const        {return _index.cend();}
 
-    void insert(const key_t &key, const score_t &score){
+    void insert(const key_t &key, const ScoreUnbiased &score){
         _index[key].push_back(score);
     }
 
@@ -180,8 +179,8 @@ struct BDTree{
     // builds the item and user indices given the training data
     void init(const std::vector<rating_t> &training_data){
         for(const auto &rat : training_data){
-            _item_index.insert(rat._item_id, score_t(rat._user_id, rat._value));
-            _user_index.insert(rat._user_id, score_t(rat._item_id, rat._value));
+            _item_index.insert(rat._item_id, ScoreUnbiased(rat._user_id, rat._value));
+            _user_index.insert(rat._user_id, ScoreUnbiased(rat._item_id, rat._value));
             _global_mean += rat._value;
         }
         _item_index.sort_all();
@@ -354,9 +353,7 @@ struct BDTree{
                     groups.swap(c_groups);
                     group_stats.swap(c_stats);
                     group_errors.swap(c_errors);
-//                    std::cout << "***";
                 }
-//                std::cout << std::endl;
             }
             _log.node(node->_id, node->_level) << "Best splitter: " << best_candidate
                                                << "\tSplitting sq.error: " << min_err << std::endl;
@@ -580,13 +577,12 @@ struct BDTree{
     }
 
     void unknown_stats(const stat_map_t &node_stats, std::vector<stat_map_t> &group_stats){
-        group_stats.emplace_back(stat_map_t{});
+        group_stats.push_back(stat_map_t{});
         // initialize the pointers to the current element for each stats
         std::vector<stat_map_t::const_iterator> it_stats;
         it_stats.push_back(node_stats.cbegin());
         for(const auto &s : group_stats)
             if(s.size() > 0)    it_stats.push_back(s.cbegin());
-
         // pass over all the stats simultaneously and update the squared error
         while(it_stats[0] != node_stats.cend()){
             // retrieve current node's stats
@@ -611,7 +607,9 @@ struct BDTree{
                     ++it_stats[gidx];
                 }
             }
-            if(n>0) group_stats[group_stats.size()-1].emplace(item, stats_t{sum, sum_unbiased, sum2, sum2_unbiased, n});
+            if(n>0) group_stats
+                    .at(group_stats.size()-1)
+                    .emplace(item, stats_t{sum, sum_unbiased, sum2, sum2_unbiased, n});
             ++it_stats[0];
         }
     }

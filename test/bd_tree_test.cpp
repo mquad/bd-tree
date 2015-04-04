@@ -31,12 +31,12 @@ std::vector<rating_t> build_training_data(){
 }
 
 TEST(BDTreeTest, ScoreTTest){
-    EXPECT_TRUE(score_t(1,2) < score_t(2,3));
-    EXPECT_TRUE(score_t(1,2) < score_t(2,1));
-    EXPECT_TRUE(score_t(1,2) < score_t(1,3));
-    EXPECT_FALSE(score_t(1,2) < score_t(1,1));
-    EXPECT_FALSE(score_t(2,2) < score_t(2,1));
-    EXPECT_FALSE(score_t(2,2) < score_t(2,2));
+    EXPECT_TRUE(ScoreUnbiased(1,2) < ScoreUnbiased(2,3));
+    EXPECT_TRUE(ScoreUnbiased(1,2) < ScoreUnbiased(2,1));
+    EXPECT_TRUE(ScoreUnbiased(1,2) < ScoreUnbiased(1,3));
+    EXPECT_FALSE(ScoreUnbiased(1,2) < ScoreUnbiased(1,1));
+    EXPECT_FALSE(ScoreUnbiased(2,2) < ScoreUnbiased(2,1));
+    EXPECT_FALSE(ScoreUnbiased(2,2) < ScoreUnbiased(2,2));
 }
 
 TEST(BDTreeTest, IndexTest){
@@ -56,13 +56,13 @@ TEST(BDTreeTest, IndexTest){
     ASSERT_EQ(4u, bdtree._item_index[6].size());
 
     //check some random item index elements
-    ASSERT_EQ(score_t(6, 5), bdtree._item_index[0][1]);
-    ASSERT_EQ(score_t(7, 4), bdtree._item_index[1][3]);
-    ASSERT_EQ(score_t(1, 2), bdtree._item_index[2][0]);
-    ASSERT_EQ(score_t(9, 1), bdtree._item_index[3][4]);
-    ASSERT_EQ(score_t(3, 2), bdtree._item_index[4][0]);
-    ASSERT_EQ(score_t(8, 5), bdtree._item_index[5][1]);
-    ASSERT_EQ(score_t(6, 4), bdtree._item_index[6][3]);
+    ASSERT_EQ(ScoreUnbiased(6, 5), bdtree._item_index[0][1]);
+    ASSERT_EQ(ScoreUnbiased(7, 4), bdtree._item_index[1][3]);
+    ASSERT_EQ(ScoreUnbiased(1, 2), bdtree._item_index[2][0]);
+    ASSERT_EQ(ScoreUnbiased(9, 1), bdtree._item_index[3][4]);
+    ASSERT_EQ(ScoreUnbiased(3, 2), bdtree._item_index[4][0]);
+    ASSERT_EQ(ScoreUnbiased(8, 5), bdtree._item_index[5][1]);
+    ASSERT_EQ(ScoreUnbiased(6, 4), bdtree._item_index[6][3]);
 
     //check user index
     ASSERT_EQ(3u, bdtree._user_index[0].size());
@@ -78,13 +78,13 @@ TEST(BDTreeTest, IndexTest){
     ASSERT_EQ(1u, bdtree._user_index[10].size());
 
     //check some random item user elements
-    ASSERT_EQ(score_t(3, 5), bdtree._user_index[0][2]);
-    ASSERT_EQ(score_t(2, 2), bdtree._user_index[1][1]);
-    ASSERT_EQ(score_t(6, 4), bdtree._user_index[1][3]);
-    ASSERT_EQ(score_t(4, 2), bdtree._user_index[3][1]);
-    ASSERT_EQ(score_t(6, 1), bdtree._user_index[5][0]);
-    ASSERT_EQ(score_t(5, 5), bdtree._user_index[8][1]);
-    ASSERT_EQ(score_t(0, 5), bdtree._user_index[10][0]);
+    ASSERT_EQ(ScoreUnbiased(3, 5), bdtree._user_index[0][2]);
+    ASSERT_EQ(ScoreUnbiased(2, 2), bdtree._user_index[1][1]);
+    ASSERT_EQ(ScoreUnbiased(6, 4), bdtree._user_index[1][3]);
+    ASSERT_EQ(ScoreUnbiased(4, 2), bdtree._user_index[3][1]);
+    ASSERT_EQ(ScoreUnbiased(6, 1), bdtree._user_index[5][0]);
+    ASSERT_EQ(ScoreUnbiased(5, 5), bdtree._user_index[8][1]);
+    ASSERT_EQ(ScoreUnbiased(0, 5), bdtree._user_index[10][0]);
 }
 
 TEST(BDTreeTest, ErrorTest){
@@ -156,11 +156,11 @@ TEST(BDTreeTest, SortingTest){
             0u,
             groups);
     EXPECT_EQ(prev_size, item_3_entry.size());
-    EXPECT_EQ(score_t(0,5), item_3_entry[0]);
-    EXPECT_EQ(score_t(4,4), item_3_entry[1]);
-    EXPECT_EQ(score_t(1,1), item_3_entry[2]);
-    EXPECT_EQ(score_t(7,2), item_3_entry[3]);
-    EXPECT_EQ(score_t(9,1), item_3_entry[4]);
+    EXPECT_EQ(ScoreUnbiased(0,5), item_3_entry[0]);
+    EXPECT_EQ(ScoreUnbiased(4,4), item_3_entry[1]);
+    EXPECT_EQ(ScoreUnbiased(1,1), item_3_entry[2]);
+    EXPECT_EQ(ScoreUnbiased(7,2), item_3_entry[3]);
+    EXPECT_EQ(ScoreUnbiased(9,1), item_3_entry[4]);
 
     EXPECT_EQ(bound_t(0,2), bounds[0]);
     EXPECT_EQ(bound_t(2,5), bounds[1]);

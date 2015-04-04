@@ -1,18 +1,11 @@
-#include <iostream>
-#include <fstream>
-#include "bd_tree.hpp"
-#include "bd_tree_eval.hpp"
+#include "abd_tree.hpp"
 #include "stopwatch.hpp"
-
-#include <boost/spirit/include/qi.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
-
-namespace qi = boost::spirit::qi;
+#include "d_tree_eval.hpp"
 
 int main(int argc, char **argv)
 {
     if(argc < 11){
-        std::cout << "Usage: ./bd-tree <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <threads> <size-hint>" << std::endl;
+        std::cout << "Usage: ./bd-tree2 <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <threads> <size-hint>" << std::endl;
         return 1;
     }
     std::string training_file(argv[1]);
@@ -32,20 +25,21 @@ int main(int argc, char **argv)
     sw.reset();
     sw.start();
     // build the decision tree
-    BDTree bdtree{lambda, h_smoothing, num_threads};
-    bdtree.init(import2(training_file, sz_hint));
+    ABDTree<ABDNode<ABDStats>> bdtree{min_ratings, lambda, h_smoothing, max_depth, num_threads};
+    bdtree.init(training_file, sz_hint);
     auto init_t = sw.elapsed_ms();
     std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
-    bdtree.build(max_depth, min_ratings);
+    bdtree.build();
     std::cout << "Tree built in " << (sw.elapsed_ms() - init_t) / 1000.0 << " s." << std::endl ;
 
     user_profiles_t query_profiles, test_profiles;
     build_profiles(query_file, query_profiles);
     build_profiles(test_file, test_profiles);
     // evaluate tree quality
-    double rmse_val = evaluate(bdtree, query_profiles, test_profiles, rmse);
+    double rmse_val = evaluate<decltype(bdtree)>(bdtree, query_profiles, test_profiles, rmse);
     std::cout << "RMSE: " << rmse_val << std::endl;
     std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
     return 0;
 }
+
 
