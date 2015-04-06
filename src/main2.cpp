@@ -4,8 +4,8 @@
 
 int main(int argc, char **argv)
 {
-    if(argc < 11){
-        std::cout << "Usage: ./bd-tree2 <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <threads> <size-hint>" << std::endl;
+    if(argc < 13){
+        std::cout << "Usage: ./bd-tree2 <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <threads> <randomize> <rand-coeff> <size-hint>" << std::endl;
         return 1;
     }
     std::string training_file(argv[1]);
@@ -17,7 +17,9 @@ int main(int argc, char **argv)
     unsigned max_depth = std::strtoul(argv[7], nullptr, 10);
     std::size_t min_ratings = std::strtoull(argv[8], nullptr, 10);
     unsigned num_threads = std::strtoul(argv[9], nullptr, 10);
-    std::size_t sz_hint = std::strtoull(argv[10], nullptr, 10);
+    bool randomize = std::strtol(argv[10], nullptr, 10);
+    double rand_coeff = std::strtod(argv[11], nullptr);
+    std::size_t sz_hint = std::strtoull(argv[12], nullptr, 10);
 
 
 
@@ -25,7 +27,7 @@ int main(int argc, char **argv)
     sw.reset();
     sw.start();
     // build the decision tree
-    ABDTree<ABDNode<ABDStats>> bdtree{min_ratings, lambda, h_smoothing, max_depth, num_threads};
+    ABDTree<ABDNode<ABDStats>> bdtree{min_ratings, lambda, h_smoothing, max_depth, num_threads, randomize, rand_coeff};
     bdtree.init(training_file, sz_hint);
     auto init_t = sw.elapsed_ms();
     std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;

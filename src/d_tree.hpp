@@ -104,7 +104,7 @@ void DTree<N>::gdt_r(node_ptr_t node){
 
     find_splitter(node, splitter, quality, groups, g_qualities, g_stats);
 
-    _log.node(node->_id, node->_level) << "Best candidate: " << splitter
+    _log.node(node->_id, node->_level) << "Splitter id: " << splitter
                                        << "\tQuality: " << quality << std::endl;
 
     if(quality <= node->_quality){
@@ -134,12 +134,12 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         std::vector<stat_map_t> c_stats;
 
         // compute the qualiy of each candidate in parallel
-    #pragma omp parallel num_threads(_num_threads)
+    #pragma omp parallel num_threads(_num_threads) private(c_groups, c_qualities, c_stats)
         {
     #pragma omp single
             {
                 for(auto it_cand = candidates.cbegin(); it_cand != candidates.cend(); ++it_cand){
-    #pragma omp task firstprivate(it_cand) private(c_groups, c_qualities, c_stats)
+    #pragma omp task firstprivate(it_cand)
                     {
                         unsigned thread_id = omp_get_thread_num();
                         double cand_quality = split_quality(node,
@@ -171,14 +171,15 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         g_qualities.swap(cand_g_qualities[best_thread]);
         g_stats.swap(cand_g_stats[best_thread]);
     }else{  // pick a candidate with probability proportianal to his enhancement in quality
-        //TODO: too much memory demanding -> store just the more promising candidates
-        std::vector<std::vector<group_t>> cand_groups{candidates.size()};
-        std::vector<std::vector<double>> cand_g_qualities{candidates.size()};
-        std::vector<std::vector<stat_map_t>> cand_g_stats{candidates.size()};
-        std::vector<std::pair<id_t, double>> cand_qualities{candidates.size(), std::make_pair(id_t{}, .0)};
+        //to reduce the memory footprint, we store just the candidate qualities, then recompute the groups just for the chosen one
+        std::vector<std::pair<id_t, double>> cand_qualities{candidates.size(), std::make_pair(id_t{},
+                                                                                              std::numeric_limits<double>::lowest())};
+        std::vector<group_t> c_groups;
+        std::vector<double> c_qualities;
+        std::vector<stat_map_t> c_stats;
 
         // compute the qualiy of each candidate in parallel
-    #pragma omp parallel num_threads(_num_threads)
+    #pragma omp parallel num_threads(_num_threads) private(c_groups, c_qualities, c_stats)
         {
     #pragma omp single
             {
@@ -190,9 +191,9 @@ void DTree<N>::find_splitter(const node_cptr_t node,
                                 std::make_pair(*it_cand,
                                                split_quality(node,
                                                              *it_cand,
-                                                             cand_groups[cand_idx],
-                                                             cand_g_qualities[cand_idx],
-                                                             cand_g_stats[cand_idx]));
+                                                             c_groups,
+                                                             c_qualities,
+                                                             c_stats));
                     }
                 }
             }
@@ -213,13 +214,19 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         std::uniform_real_distribution<double> rnd(0, cum_probs.back());
         double p = rnd(*_mt);
         auto it_prob = cum_probs.cbegin();
-        while(*it_prob <= p) ++it_prob;
+        auto prob_end = cum_probs.cend();
+        while(it_prob != prob_end-1 &&
+              *it_prob <= p) ++it_prob;
         const auto &chosen = cand_qualities.at(std::distance(cum_probs.cbegin(), it_prob));
         splitter = chosen.first;
         quality = chosen.second;
-        groups.swap(cand_groups[splitter]);
-        g_qualities.swap(cand_g_qualities[splitter]);
-        g_stats.swap(cand_g_stats[splitter]);
+
+        // recompute the groups, qualities and stats for the chosen splitter
+        split_quality(node,splitter,c_groups,c_qualities,c_stats);
+
+        groups.swap(c_groups);
+        g_qualities.swap(c_qualities);
+        g_stats.swap(c_stats);
     }
 }
 

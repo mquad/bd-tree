@@ -252,9 +252,10 @@ void ABDTree<N>::split(node_ptr_t node,
         child->_stats.swap(g_stats[child_idx]);
         child->_top_pop = node->_top_pop;
         child->cache_predictions(node, _h_smooth);
-        if(child_idx < groups.size())
+        if(child_idx < groups.size()){
             child->_num_users = groups[child_idx].size();
-        u_num_users -= child->_num_users;
+            u_num_users -= child->_num_users;
+        }
         children.push_back(std::unique_ptr<N>(child));
     }
     children.back()->_num_users = u_num_users;
