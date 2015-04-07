@@ -22,12 +22,14 @@ public:
 
 public:
     DTree(const unsigned depth_max,
+          const unsigned ratings_min,
           const unsigned num_threads = 1,
           const bool randomize = false,
           const double rand_coeff = 10,
           const BasicLogger &log = BasicLogger{std::cout}):
         _root{nullptr}, _mt{nullptr},
-        _depth_max{depth_max}, _num_threads{num_threads}, _randomize{randomize}, _rand_coeff{rand_coeff},
+        _depth_max{depth_max}, _ratings_min{ratings_min}, _num_threads{num_threads},
+        _randomize{randomize}, _rand_coeff{rand_coeff},
         _log{log}{}
 
     void gdt_r(node_ptr_t node);
@@ -68,6 +70,7 @@ protected:
     std::unique_ptr<N> _root;
     std::unique_ptr<std::mt19937> _mt;
     unsigned _depth_max;
+    std::size_t _ratings_min;
     unsigned _num_threads;
     bool _randomize;
     double _rand_coeff;
@@ -91,9 +94,13 @@ void DTree<N>::init(const std::string &training_filename, const std::size_t sz_h
 
 template<typename N>
 void DTree<N>::gdt_r(node_ptr_t node){
-    // check termination condition on node's level
+    // check termination conditions
     if(node->_level >= _depth_max){
         _log.node(node->_id, node->_level) << "Maximum depth (" << _depth_max << ") reached. STOP." << std::endl;
+        return;
+    }
+    if(node->_num_ratings < _ratings_min){
+        _log.node(node->_id, node->_level) << "This node has < " << _ratings_min << " ratings. STOP." << std::endl;
         return;
     }
     id_t splitter{};

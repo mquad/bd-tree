@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     sw.reset();
     sw.start();
     // build the decision tree
-    ABDTree<ABDNode<ABDStats>> bdtree{min_ratings, lambda, h_smoothing, max_depth, top_pop, num_threads, randomize, rand_coeff};
+    ABDTree<ABDNode<ABDStats>> bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff};
     bdtree.init(training_file, sz_hint);
     auto init_t = sw.elapsed_ms();
     std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;

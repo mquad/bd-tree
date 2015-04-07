@@ -139,18 +139,18 @@ protected:
     using typename DTree<N>::node_cptr_t;
     using typename DTree<N>::id_t;
 public:
-    ABDTree(const std::size_t min_ratings = 200000,
-            const double bu_reg = 7,
+    ABDTree(const double bu_reg = 7,
             const double h_smooth = 100,
             const unsigned depth_max = 6,
+            const std::size_t ratings_min = 200000,
             const std::size_t top_pop = 0,
             const unsigned num_threads = 1,
             const bool randomize = false,
             const double rand_coeff = 10,
             const BasicLogger &log = BasicLogger{std::cout}):
-        DTree<N>(depth_max, num_threads, randomize, rand_coeff, log),
+        DTree<N>(depth_max, ratings_min, num_threads, randomize, rand_coeff, log),
         _item_index{}, _user_index{}, _node_bounds{},
-        _min_ratings{min_ratings}, _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _node_counter{0u}{}
+        _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _node_counter{0u}{}
 
     ~ABDTree(){}
 
@@ -189,7 +189,6 @@ protected:
     index_t _item_index;
     index_t _user_index;
     std::map<id_t, bound_map_t> _node_bounds;
-    std::size_t _min_ratings;
     double _bu_reg;
     double _h_smooth;
     std::size_t _top_pop;
