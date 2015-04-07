@@ -2,28 +2,18 @@
 #define STATS_HPP
 #include <iostream>
 #include <map>
+#include <vector>
 #include "score.hpp"
 
-template<typename S>
-struct Stats{
-    using score_t = S;
-    // the minimal statistics is made of the number of ratings per item
-    int _n;
-    Stats(int n) : _n{n}{}
-    Stats() : _n{0}{}
+struct ABDStats{
+    using score_t = ScoreUnbiased;
 
-    virtual void update(const S &score) = 0;
-    virtual double quality() const = 0;
-};
-
-struct ABDStats : public Stats<ScoreUnbiased>{
-    using Stats<ScoreUnbiased>::_n;
     double _sum, _sum_unbiased;
     double _sum2, _sum2_unbiased;
+    int _n;
 
     ABDStats(double sum, double sum_unbiased, double sum2, double sum2_unbiased, int n) :
-        Stats<ScoreUnbiased>(n),
-        _sum{sum}, _sum_unbiased{sum_unbiased}, _sum2{sum2}, _sum2_unbiased{sum2_unbiased}{}
+        _sum{sum}, _sum_unbiased{sum_unbiased}, _sum2{sum2}, _sum2_unbiased{sum2_unbiased}, _n{n}{}
     ABDStats() : ABDStats(.0, .0, .0, .0, 0){}
 
     void update(const ScoreUnbiased &score){
@@ -34,11 +24,28 @@ struct ABDStats : public Stats<ScoreUnbiased>{
         ++_n;
     }
 
-    double quality() const override{
+    double squared_error() const{
         if(_n <= 0) throw std::runtime_error("n <= 0");
-        return -(_sum2_unbiased - (_sum_unbiased * _sum_unbiased) / _n);
+        return _sum2_unbiased - (_sum_unbiased * _sum_unbiased) / _n;
     }
 
+    double pred() const{
+        if(_n <= 0) throw std::runtime_error("n <= 0");
+        return _sum / _n;
+    }
+
+    double pred(const double parent_pred, const double h_smooth) const{
+        return (_sum + h_smooth * parent_pred) / (_n + h_smooth);
+    }
+
+    double score() const{
+        if(_n <= 0) throw std::runtime_error("n <= 0");
+        return _sum_unbiased / _n;
+    }
+
+    double score(const double parent_score, const double h_smooth) const{
+        return (_sum_unbiased + h_smooth * parent_score) / (_n + h_smooth);
+    }
 
     ABDStats& operator-=(const ABDStats &rhs){
         this->_sum -= rhs._sum;
@@ -66,7 +73,47 @@ template<typename K, typename S>
 double compute_quality(const StatMap<K, S> &map){
     double q{.0};
     for(const auto entry : map)
-        q += entry.second.quality();
+        q -= entry.second.squared_error();
     return q;
 }
+
+
+template<typename K, typename S>
+void build_ranking(const StatMap<K, S> &stats, std::vector<K> &ranking){
+    std::vector<std::pair<K, double>> items_by_score;
+    for(const auto &entry : stats)
+        items_by_score.emplace_back(entry.first, entry.second.score());
+    std::sort(items_by_score.begin(),
+              items_by_score.end(),
+              [](const std::pair<K, double> &lhs, const std::pair<K, double> &rhs){
+        return lhs.second > rhs.second;
+    });
+    ranking.reserve(items_by_score.size());
+    for(const auto &item : items_by_score)
+        ranking.emplace_back(item.first);
+}
+
+
+template<typename K, typename S>
+void build_ranking(const StatMap<K, S> &stats, const std::map<K, double> &parent_scores, const double h_smooth, std::vector<K> &ranking){
+    // sort items by smoothed score
+    std::vector<std::pair<K, double>> items_by_score;
+    items_by_score.reserve(parent_scores.size());
+    for(const auto &p_pred : parent_scores){
+        try{
+            items_by_score.emplace_back(p_pred.first, stats.at(p_pred.first).score(p_pred.second, h_smooth));
+        }catch(std::out_of_range &){
+            items_by_score.emplace_back(p_pred.first, p_pred.second);
+        }
+    }
+    std::sort(items_by_score.begin(),
+              items_by_score.end(),
+              [](const std::pair<K, double> &lhs, const std::pair<K, double> &rhs){
+        return lhs.second > rhs.second;
+    });
+    ranking.reserve(items_by_score.size());
+    for(const auto &item : items_by_score)
+        ranking.emplace_back(item.first);
+}
+
 #endif // STATS_HPP

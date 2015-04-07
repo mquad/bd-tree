@@ -6,13 +6,11 @@
 #include "d_tree.hpp"
 #include "stats.hpp"
 
-template<typename S>
 struct ABDNode{
     using id_t = std::size_t;
-    using stat_map_t = StatMap<id_t, S>;
-    using pred_map_t = std::map<id_t, double>;
+    using stat_map_t = StatMap<id_t, ABDStats>;
 
-    ABDNode(const std::vector<ABDNode<S>*> &children,
+    ABDNode(const std::vector<ABDNode*> &children,
             id_t id,
             id_t splitter_id,
             unsigned level,
@@ -22,12 +20,14 @@ struct ABDNode{
             std::size_t num_ratings,
             std::size_t top_pop,
             const stat_map_t &stats,
-            const pred_map_t &predictions):
+            const std::map<id_t, double> &pred_rating,
+            const std::map<id_t, double> &pred_rating_unbiased,
+            const std::vector<id_t> &rank):
         _children{}, _id{id}, _splitter_id{splitter_id}, _level{level}, _quality{quality}, _split_quality{split_quality},
-        _num_users{num_users}, _num_ratings{num_ratings},_top_pop{top_pop},
-        _stats{stats}, _predictions{predictions}{
+        _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
+        _stats{stats}, _pred_rating{pred_rating}, _scores{pred_rating_unbiased}, _rank{rank}{
         for(auto node : children)
-            _children.push_back(std::unique_ptr<ABDNode<S>>(node));
+            _children.push_back(std::unique_ptr<ABDNode>(node));
     }
 
     ABDNode(id_t id,
@@ -36,7 +36,7 @@ struct ABDNode{
             std::size_t num_users,
             std::size_t top_pop,
             const stat_map_t &stats):
-        ABDNode(std::vector<ABDNode<S>*>{},
+        ABDNode(std::vector<ABDNode*>{},
                 id,
                 -1,
                 level,
@@ -46,14 +46,14 @@ struct ABDNode{
                 num_ratings,
                 top_pop,
                 stats,
-                pred_map_t{}){
-        //compute node quality with the given stats
-        this->_quality = compute_quality(this->_stats);
-    }
+                std::map<id_t, double>{},
+                std::map<id_t, double>{},
+                std::vector<id_t>{}){}
 
     ABDNode() : ABDNode(-1, -1, -1, -1, 0, stat_map_t{}){}
 
-    void cache_predictions(const ABDNode * const parent, const double h_smooth);
+    void cache_pred_rank(const ABDNode * const parent, const double h_smooth);
+    void cache_ranking();
 
     std::vector<id_t> candidates() const{
         if(_top_pop > 0){ // Most Popular Sampling
@@ -88,11 +88,15 @@ struct ABDNode{
     }
 
     double prediction(const id_t item_id) const{
-        return _predictions.at(item_id);
+        return _pred_rating.at(item_id);
+    }
+
+    std::vector<id_t> rank(const std::size_t length) const{
+        return std::vector<id_t>(_rank.begin(), _rank.begin() + length);
     }
 
 
-    std::vector<std::unique_ptr<ABDNode<S>>> _children;
+    std::vector<std::unique_ptr<ABDNode>> _children;
     id_t _id;
     id_t _splitter_id;
     unsigned _level;
@@ -102,42 +106,75 @@ struct ABDNode{
     std::size_t _num_ratings;
     std::size_t _top_pop;
     stat_map_t _stats;
-    pred_map_t _predictions;
+    std::map<id_t, double> _pred_rating;
+    std::map<id_t, double> _scores;
+    std::vector<id_t> _rank;
 
 };
-template<typename S>
-void ABDNode<S>::cache_predictions(const ABDNode * const parent, const double h_smooth){
-    if(this->_level > 1){
-        for(const auto &p_pred : parent->_predictions){
-            double sum{};
-            int n{};
+
+void ABDNode::cache_pred_rank(const ABDNode * const parent, const double h_smooth){
+    if(parent != nullptr){
+        // user average prediction
+        for(const auto &p_pred : parent->_pred_rating){
             try{
-                const auto &node_stats = this->_stats.at(p_pred.first);
-                sum = node_stats._sum;
-                n = node_stats._n;
-            }catch(std::out_of_range &){}
-            double pred{(sum + h_smooth * p_pred.second) / (n + h_smooth)};
-            _predictions.emplace(p_pred.first, pred);
+                _pred_rating.emplace(p_pred.first, _stats.at(p_pred.first).pred(p_pred.second, h_smooth));
+            }catch(std::out_of_range &){
+                _pred_rating.emplace(p_pred.first, p_pred.second);
+            }
+        }
+        // user unbiased average prediction
+        // i.e., average deviation from the user average prediction
+        for(const auto &p_score : parent->_scores){
+            try{
+                _scores.emplace(p_score.first, _stats.at(p_score.first).score(p_score.second, h_smooth));
+            }catch(std::out_of_range &){
+                _scores.emplace(p_score.first, p_score.second);
+            }
         }
     }else{
         //root node
         for(const auto &s : this->_stats){
-            _predictions.emplace(s.first, s.second._sum / s.second._n);
+            _pred_rating.emplace(s.first, s.second.pred());
+        }
+        for(const auto &s : this->_stats){
+            _scores.emplace(s.first, s.second.score());
         }
     }
+    // cache also the item ranking
+    this->cache_ranking();
 }
 
+void ABDNode::cache_ranking(){
+    // sort items by unbiased rating
+    std::vector<std::pair<id_t, double>> items_by_score;
+    items_by_score.reserve(_scores.size());
+    for(const auto &rat : _scores)
+        items_by_score.emplace_back(rat.first, rat.second);
+    std::sort(items_by_score.begin(),
+              items_by_score.end(),
+              [](const std::pair<id_t, double> &lhs, const std::pair<id_t, double> &rhs){
+        return lhs.second > rhs.second;
+    });
+    _rank.reserve(items_by_score.size());
+    for(const auto &item : items_by_score)
+        _rank.emplace_back(item.first);
+}
 
-template<typename N>
-class ABDTree : public DTree<N>{
+/*
+ * Implementation of the Adaptive Bootstrapping Decision Trees method described in
+ * "Adaptive Bootstrapping of Recommender Systems Using Decision Trees", Golbandi et. al, WSDM'11
+*/
+
+template<typename Node>
+class ABDTree : public DTree<Node>{
 protected:
-    using index_t = ABDIndex<typename N::id_t, ABDStats>;
+    using index_t = ABDIndex<typename Node::id_t, ABDStats>;
     using bound_t = typename index_t::bound_t;
-    using bound_map_t = std::unordered_map<typename index_t::key_t, bound_t>;
-    using stat_map_t = typename DTree<N>::stat_map_t;
-    using typename DTree<N>::node_ptr_t;
-    using typename DTree<N>::node_cptr_t;
-    using typename DTree<N>::id_t;
+    using bound_map_t = std::unordered_map<typename Node::id_t, bound_t>;
+    using stat_map_t = typename DTree<Node>::stat_map_t;
+    using typename DTree<Node>::node_ptr_t;
+    using typename DTree<Node>::node_cptr_t;
+    using typename DTree<Node>::id_t;
 public:
     ABDTree(const double bu_reg = 7,
             const double h_smooth = 100,
@@ -148,17 +185,31 @@ public:
             const bool randomize = false,
             const double rand_coeff = 10,
             const BasicLogger &log = BasicLogger{std::cout}):
-        DTree<N>(depth_max, ratings_min, num_threads, randomize, rand_coeff, log),
+        DTree<Node>(depth_max, ratings_min, num_threads, randomize, rand_coeff, log),
         _item_index{}, _user_index{}, _node_bounds{},
         _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _node_counter{0u}{}
 
     ~ABDTree(){}
 
-    using DTree<N>::init;
-    using DTree<N>::gdt_r;
+    using DTree<Node>::gdt_r;
 
     void build() override;
-    void init(const std::vector<rating_t> &training_data) override;
+    void init(const std::vector<Rating> &training_data) override;
+    node_cptr_t traverse(const profile_t &answers) const override;
+    double predict(const node_cptr_t node, const id_t item_id) const{
+        return node->prediction(item_id);
+    }
+
+
+protected:
+    void compute_biases(const double global_mean);
+    void compute_root_quality(node_ptr_t node) override;
+
+    template<typename It>
+    std::vector<bound_t> sort_by_group(It left,
+                                       It right,
+                                       std::size_t start,
+                                       const std::vector<group_t> &groups);
     void split(node_ptr_t node,
                const id_t splitter_id,
                const double splitter_quality,
@@ -170,19 +221,7 @@ public:
                          std::vector<group_t> &groups,
                          std::vector<double> &g_qualities,
                          std::vector<stat_map_t> &g_stats) const override;
-    node_cptr_t traverse(const profile_t &answers) const override;
-    double predict(const node_cptr_t node, const id_t item_id) const{
-        return node->prediction(item_id);
-    }
-
-
-protected:
-    void compute_biases(const double global_mean);
-    template<typename It>
-    std::vector<bound_t> sort_by_group(It left,
-                                       It right,
-                                       std::size_t start,
-                                       const std::vector<group_t> &groups);
+    double squared_error(const stat_map_t &stats) const;
     void unknown_stats(const node_cptr_t node,
                        std::vector<stat_map_t> &group_stats) const;
 protected:
@@ -196,7 +235,7 @@ protected:
 };
 
 template<typename N>
-void ABDTree<N>::init(const std::vector<rating_t> &training_data){
+void ABDTree<N>::init(const std::vector<Rating> &training_data){
     double global_mean{0};
     for(const auto &rat : training_data){
         _item_index.insert(rat._item_id, ScoreUnbiased{rat._user_id, rat._value, rat._value});
@@ -217,6 +256,7 @@ void ABDTree<N>::init(const std::vector<rating_t> &training_data){
                                            _user_index.size(),
                                            _top_pop,
                                            _user_index.all_stats()));
+    compute_root_quality(this->_root.get());
 }
 
 template<typename N>
@@ -235,12 +275,26 @@ void ABDTree<N>::compute_biases(const double global_mean){
 }
 
 template<typename N>
+void ABDTree<N>::compute_root_quality(node_ptr_t node){
+    node->_quality = -squared_error(node->_stats);
+}
+
+template<typename N>
+double ABDTree<N>::squared_error(const stat_map_t &stats) const{
+    double sq{.0};
+    for(const auto &entry : stats)
+        sq += entry.second.squared_error();
+    return sq;
+
+}
+
+template<typename N>
 void ABDTree<N>::build(){
     // compute root node's bounds
     for(const auto &entry : _item_index)
         _node_bounds[this->_root->_id].emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
     // cache root's predictions
-    this->_root->cache_predictions(nullptr, _h_smooth);
+    this->_root->cache_pred_rank(nullptr, _h_smooth);
     // generate the decision tree
     this->_log.node(this->_root->_id, this->_root->_level)
             << "Num.users: " << this->_root->_num_users
@@ -270,7 +324,7 @@ void ABDTree<N>::split(node_ptr_t node,
         child->_quality = g_qualities[child_idx];
         child->_stats.swap(g_stats[child_idx]);
         child->_top_pop = node->_top_pop;
-        child->cache_predictions(node, _h_smooth);
+        child->cache_pred_rank(node, _h_smooth);
         if(child_idx < groups.size()){
             child->_num_users = groups[child_idx].size();
             u_num_users -= child->_num_users;
@@ -326,10 +380,10 @@ double ABDTree<N>::split_quality(const node_cptr_t node,
         }
     }
     unknown_stats(node, g_stats);
-    //compute the split error
+    //compute the split error on the training data
     double split_quality{.0};
     for(const auto &stats : g_stats){
-        double gq{compute_quality(stats)};
+        double gq{-squared_error(stats)};
         g_qualities.push_back(gq);
         split_quality += gq;
     }

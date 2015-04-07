@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <omp.h>
 #include "../util/basic_log.hpp"
+#include "ratings.hpp"
 #include "types.hpp"
 
 
@@ -177,7 +178,7 @@ struct BDTree{
 
 
     // builds the item and user indices given the training data
-    void init(const std::vector<rating_t> &training_data){
+    void init(const std::vector<Rating> &training_data){
         for(const auto &rat : training_data){
             _item_index.insert(rat._item_id, ScoreUnbiased(rat._user_id, rat._value));
             _user_index.insert(rat._user_id, ScoreUnbiased(rat._item_id, rat._value));

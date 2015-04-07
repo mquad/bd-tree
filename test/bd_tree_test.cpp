@@ -1,36 +1,37 @@
 #include <gtest/gtest.h>
 #include <cmath>
 #include "bd_tree.hpp"
+#include "ratings.hpp"
 
-std::vector<rating_t> build_training_data(){
-    return std::vector<rating_t> {
-        rating_t(0, 0, 4),
-        rating_t(0, 1, 1),
-        rating_t(0, 3, 5),
-        rating_t(1, 1, 3),
-        rating_t(1, 2, 2),
-        rating_t(1, 3, 1),
-        rating_t(1, 6, 4),
-        rating_t(2, 5, 1),
-        rating_t(2, 6, 5),
-        rating_t(3, 1, 5),
-        rating_t(3, 4, 2),
-        rating_t(4, 2, 5),
-        rating_t(4, 3, 4),
-        rating_t(5, 6, 1),
-        rating_t(6, 0, 5),
-        rating_t(6, 6, 4),
-        rating_t(7, 1, 4),
-        rating_t(7, 3, 2),
-        rating_t(8, 4, 4),
-        rating_t(8, 5, 5),
-        rating_t(9, 2, 3),
-        rating_t(9, 3, 1),
-        rating_t(10, 0, 5)
+std::vector<Rating> build_training_data(){
+    return std::vector<Rating> {
+        Rating(0, 0, 4),
+        Rating(0, 1, 1),
+        Rating(0, 3, 5),
+        Rating(1, 1, 3),
+        Rating(1, 2, 2),
+        Rating(1, 3, 1),
+        Rating(1, 6, 4),
+        Rating(2, 5, 1),
+        Rating(2, 6, 5),
+        Rating(3, 1, 5),
+        Rating(3, 4, 2),
+        Rating(4, 2, 5),
+        Rating(4, 3, 4),
+        Rating(5, 6, 1),
+        Rating(6, 0, 5),
+        Rating(6, 6, 4),
+        Rating(7, 1, 4),
+        Rating(7, 3, 2),
+        Rating(8, 4, 4),
+        Rating(8, 5, 5),
+        Rating(9, 2, 3),
+        Rating(9, 3, 1),
+        Rating(10, 0, 5)
     };
 }
 
-TEST(BDTreeTest, ScoreTTest){
+TEST(BDTreeTest, ScoreTest){
     EXPECT_TRUE(ScoreUnbiased(1,2) < ScoreUnbiased(2,3));
     EXPECT_TRUE(ScoreUnbiased(1,2) < ScoreUnbiased(2,1));
     EXPECT_TRUE(ScoreUnbiased(1,2) < ScoreUnbiased(1,3));

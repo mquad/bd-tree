@@ -30,3 +30,4 @@ add_subdirectory(test)      #tests
 #add test target (make test)
 enable_testing()
 add_test(NAME BDTreeTest COMMAND bd_tree_test)
+add_test(NAME MetricsTest COMMAND metrics_test)

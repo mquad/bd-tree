@@ -27,9 +27,10 @@ int main(int argc, char **argv)
     stopwatch sw;
     sw.reset();
     sw.start();
+
     // build the decision tree
-    ABDTree<ABDNode<ABDStats>> bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff};
-    bdtree.init(training_file, sz_hint);
+    ABDTree<ABDNode> bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff};
+    bdtree.init(Rating::read_from(training_file, sz_hint));
     auto init_t = sw.elapsed_ms();
     std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
     bdtree.build();
@@ -44,5 +45,3 @@ int main(int argc, char **argv)
     std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
     return 0;
 }
-
-

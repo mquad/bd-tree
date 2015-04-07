@@ -1,16 +1,13 @@
 #ifndef D_TREE_HPP
 #define D_TREE_HPP
-#include <boost/spirit/include/qi.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
 #include <limits>
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include "types.hpp"
+#include "ratings.hpp"
 #include "stats.hpp"
+#include "types.hpp"
 #include "../util/basic_log.hpp"
-
-namespace qi = boost::spirit::qi;
 
 template<typename N>
 class DTree{
@@ -32,26 +29,23 @@ public:
         _randomize{randomize}, _rand_coeff{rand_coeff},
         _log{log}{}
 
+
+
+    virtual ~DTree(){}
+    virtual void build() = 0;
+    virtual void init(const std::vector<Rating> &training_data) = 0;
     void gdt_r(node_ptr_t node);
-    void init(const std::string &training_filename,
-              const std::size_t sz_hint = 1000000);
+    virtual node_cptr_t traverse(const profile_t &answers) const = 0;
 
 protected:
+    virtual void compute_root_quality(node_ptr_t node) = 0;
+
     void find_splitter(const node_cptr_t node,
                        id_t &splitter,
                        double &quality,
                        std::vector<group_t> &groups,
                        std::vector<double> &g_qualities,
                        std::vector<stat_map_t> &g_stats);
-    void rnd_init(){
-        std::random_device rd;
-        _mt = std::unique_ptr<std::mt19937>(new std::mt19937(rd()));
-    }
-
-public:
-    virtual ~DTree(){}
-    virtual void build() = 0;
-    virtual void init(const std::vector<rating_t> &training_data) = 0;
     virtual void split(node_ptr_t node,
                        const id_t splitter_id,
                        const double splitter_quality,
@@ -63,9 +57,10 @@ public:
                                  std::vector<group_t> &groups,
                                  std::vector<double> &g_qualities,
                                  std::vector<stat_map_t> &g_stats) const = 0;
-
-    virtual node_cptr_t traverse(const profile_t &answers) const = 0;
-
+    void rnd_init(){
+        std::random_device rd;
+        _mt = std::unique_ptr<std::mt19937>(new std::mt19937(rd()));
+    }
 protected:
     std::unique_ptr<N> _root;
     std::unique_ptr<std::mt19937> _mt;
@@ -77,20 +72,6 @@ protected:
     BasicLogger _log;
 
 };
-
-template<typename N>
-void DTree<N>::init(const std::string &training_filename, const std::size_t sz_hint){
-    boost::iostreams::mapped_file mmap(training_filename, boost::iostreams::mapped_file::readonly);
-    auto f = mmap.const_data();
-    auto l = f + mmap.size();
-
-    std::vector<rating_t> ratings;
-    ratings.reserve(sz_hint);
-    if(!qi::phrase_parse(f,l,(qi::ulong_long > qi::ulong_long > qi::double_) % qi::eol, qi::blank, ratings))
-        throw std::runtime_error ("Unable to parse the training file.");
-
-    init(ratings);
-}
 
 template<typename N>
 void DTree<N>::gdt_r(node_ptr_t node){

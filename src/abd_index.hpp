@@ -4,14 +4,13 @@
 #include <vector>
 #include "stats.hpp"
 
-template<typename K, typename S>
+template<typename Key, typename Stat>
 class ABDIndex{
 public:
-    using score_t = typename S::score_t;
-    using key_t = K;
+    using score_t = typename Stat::score_t;
     using entry_t = std::vector<score_t>;
 protected:
-    std::map<key_t, entry_t> _index;
+    std::map<Key, entry_t> _index;
 public:
     struct bound_t{
         std::size_t _left, _right;
@@ -37,16 +36,16 @@ public:
 
     // accessors for some basic properties
     std::size_t size() const    {return _index.size();}
-    entry_t& at(const key_t &key)              {return _index.at(key);}
-    const entry_t& at(const key_t& key) const  {return _index.at(key);}
-    entry_t& operator[] (const key_t &key)     {return _index[key];}
+    entry_t& at(const Key &key)              {return _index.at(key);}
+    const entry_t& at(const Key& key) const  {return _index.at(key);}
+    entry_t& operator[] (const Key &key)     {return _index[key];}
 
     decltype(_index.begin()) begin()            {return _index.begin();}
     decltype(_index.end()) end()                {return _index.end();}
     decltype(_index.cbegin()) cbegin() const    {return _index.cbegin();}
     decltype(_index.cend()) cend() const        {return _index.cend();}
 
-    void insert(const key_t &key, const score_t &score){
+    void insert(const Key &key, const score_t &score){
         _index[key].push_back(score);
     }
 
@@ -55,19 +54,19 @@ public:
             sort_entry(entry.first);
     }
 
-    void sort_entry(const key_t &key){
+    void sort_entry(const Key &key){
         std::stable_sort(_index.at(key).begin(), _index.at(key).end());
     }
 
-    StatMap<K, S> all_stats() const{
-        StatMap<K, S>  stats{};
+    StatMap<Key, Stat> all_stats() const{
+        StatMap<Key, Stat>  stats{};
         for(const auto &entry : _index)
             update_stats(stats, entry.first);
         return stats;
     }
 
     // updates the stats with all the values associated to a given key
-    void update_stats(StatMap<K, S> &stats, const key_t key) const{
+    void update_stats(StatMap<Key, Stat> &stats, const Key key) const{
         if(_index.count(key) > 0){
             for(const auto &score : _index.at(key))
                 stats[score._id].update(score);
