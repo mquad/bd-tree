@@ -7,18 +7,23 @@
 template<typename S>
 struct Stats{
     using score_t = S;
+    // the minimal statistics is made of the number of ratings per item
+    int _n;
+    Stats(int n) : _n{n}{}
+    Stats() : _n{0}{}
 
     virtual void update(const S &score) = 0;
     virtual double quality() const = 0;
 };
 
 struct ABDStats : public Stats<ScoreUnbiased>{
+    using Stats<ScoreUnbiased>::_n;
     double _sum, _sum_unbiased;
     double _sum2, _sum2_unbiased;
-    int _n;
 
     ABDStats(double sum, double sum_unbiased, double sum2, double sum2_unbiased, int n) :
-        _sum{sum}, _sum_unbiased{sum_unbiased}, _sum2{sum2}, _sum2_unbiased{sum2_unbiased}, _n{n}{}
+        Stats<ScoreUnbiased>(n),
+        _sum{sum}, _sum_unbiased{sum_unbiased}, _sum2{sum2}, _sum2_unbiased{sum2_unbiased}{}
     ABDStats() : ABDStats(.0, .0, .0, .0, 0){}
 
     void update(const ScoreUnbiased &score){

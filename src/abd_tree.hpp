@@ -53,19 +53,37 @@ struct ABDNode{
 
     ABDNode() : ABDNode(-1, -1, -1, -1, 0, stat_map_t{}){}
 
-    void cache_predictions(const ABDNode *parent, const double h_smooth);
+    void cache_predictions(const ABDNode * const parent, const double h_smooth);
 
     std::vector<id_t> candidates() const{
-        std::vector<id_t> cand;
-        if(_top_pop > 0){
-            // Most Popular Sampling
+        if(_top_pop > 0){ // Most Popular Sampling
+            // sort items by popularity
+            std::vector<std::pair<id_t, int>> items_by_pop;
+            items_by_pop.reserve(_stats.size());
+            for(const auto &entry : _stats) items_by_pop.emplace_back(entry.first, entry.second._n);
+            std::sort(items_by_pop.begin(),
+                      items_by_pop.end(),
+                      [](const std::pair<id_t, int> &lhs, const std::pair<id_t, int> &rhs){
+                return lhs.second > rhs.second;
+            });
+            // then peek the first _top_pop ones
+            std::vector<id_t> cand;
             cand.reserve(_top_pop);
+            auto it_end = _top_pop < items_by_pop.size() ?
+                        items_by_pop.cbegin() + _top_pop :
+                        items_by_pop.cend();
+            for(auto it = items_by_pop.cbegin(); it != it_end; ++it)
+                cand.emplace_back(it->first);
+            return cand;
+
         }else{
+            std::vector<id_t> cand;
             cand.reserve(this->_stats.size());
-            for(auto it = this->_stats.cbegin(); it != this->_stats.cend(); ++it)
-                cand.push_back(it->first);
+            auto it_end = this->_stats.cend();
+            for(auto it = this->_stats.cbegin(); it != it_end; ++it)
+                cand.emplace_back(it->first);
+            return cand;
         }
-        return cand;
 
     }
 
@@ -88,7 +106,7 @@ struct ABDNode{
 
 };
 template<typename S>
-void ABDNode<S>::cache_predictions(const ABDNode *parent, const double h_smooth){
+void ABDNode<S>::cache_predictions(const ABDNode * const parent, const double h_smooth){
     if(this->_level > 1){
         for(const auto &p_pred : parent->_predictions){
             double sum{};
@@ -125,13 +143,14 @@ public:
             const double bu_reg = 7,
             const double h_smooth = 100,
             const unsigned depth_max = 6,
+            const std::size_t top_pop = 0,
             const unsigned num_threads = 1,
             const bool randomize = false,
             const double rand_coeff = 10,
             const BasicLogger &log = BasicLogger{std::cout}):
         DTree<N>(depth_max, num_threads, randomize, rand_coeff, log),
         _item_index{}, _user_index{}, _node_bounds{},
-        _min_ratings{min_ratings}, _bu_reg{bu_reg}, _h_smooth{h_smooth}, _node_counter{0u}{}
+        _min_ratings{min_ratings}, _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _node_counter{0u}{}
 
     ~ABDTree(){}
 
@@ -173,6 +192,7 @@ protected:
     std::size_t _min_ratings;
     double _bu_reg;
     double _h_smooth;
+    std::size_t _top_pop;
     unsigned _node_counter;
 };
 
@@ -196,7 +216,7 @@ void ABDTree<N>::init(const std::vector<rating_t> &training_data){
                                            1,
                                            training_data.size(),
                                            _user_index.size(),
-                                           0,
+                                           _top_pop,
                                            _user_index.all_stats()));
 }
 
