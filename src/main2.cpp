@@ -42,6 +42,11 @@ int main(int argc, char **argv)
     // evaluate tree quality
     double rmse_val = evaluate<decltype(bdtree)>(bdtree, query_profiles, test_profiles, rmse);
     std::cout << "RMSE: " << rmse_val << std::endl;
+
+    double map = evaluate_ranking<decltype(bdtree), AveragePrecision<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "MAP: " << map << std::endl;
+    double ndcg = evaluate_ranking<decltype(bdtree), NDCG<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "NDCG: " << ndcg << std::endl;
     std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
     return 0;
 }

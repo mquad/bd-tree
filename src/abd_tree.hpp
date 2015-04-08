@@ -25,7 +25,7 @@ struct ABDNode{
             const std::vector<id_t> &rank):
         _children{}, _id{id}, _splitter_id{splitter_id}, _level{level}, _quality{quality}, _split_quality{split_quality},
         _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
-        _stats{stats}, _pred_rating{pred_rating}, _scores{pred_rating_unbiased}, _rank{rank}{
+        _stats{stats}, _pred_rating{pred_rating}, _scores{pred_rating_unbiased}, _rank{rank}, _users{}{
         for(auto node : children)
             _children.push_back(std::unique_ptr<ABDNode>(node));
     }
@@ -109,6 +109,8 @@ struct ABDNode{
     std::map<id_t, double> _pred_rating;
     std::map<id_t, double> _scores;
     std::vector<id_t> _rank;
+    group_t _users;
+
 
 };
 
@@ -199,7 +201,9 @@ public:
     double predict(const node_cptr_t node, const id_t item_id) const{
         return node->prediction(item_id);
     }
-
+    std::vector<id_t> ranking(const node_cptr_t node) const{
+        return node->_rank;
+    }
 
 protected:
     void compute_biases(const double global_mean);
@@ -343,15 +347,6 @@ void ABDTree<N>::split(node_ptr_t node,
             children[gidx]->_num_ratings += g_bounds[gidx].size();
         }
     }
-
-    //recursive call
-    for(auto &child : children){
-        this->_log.node(child->_id, child->_level)
-                << "Num.users: " << child->_num_users
-                << "\tNum.ratings: " << child->_num_ratings
-                << "\tQuality: " << child->_quality << std::endl;
-        gdt_r(child.get());
-    }
 }
 
 template<typename N>
@@ -407,14 +402,14 @@ typename ABDTree<N>::node_cptr_t ABDTree<N>::traverse(const profile_t &answers) 
 }
 
 // takes a range of a container of (id, rating) values
-// pre: elements in the range [left, right) must be sorted by "id" asc
-// pre: vectors in groups must be sorted in asc ordere
+// pre: elements in the range [left, right) must be sorted by "id" ascending
+// pre: vectors in groups must be sorted in ascending order
 template<typename N>
 template<typename It>
 std::vector<typename ABDTree<N>::bound_t> ABDTree<N>::sort_by_group(It left,
-                                                                 It right,
-                                                                 std::size_t start,
-                                                                 const std::vector<group_t> &groups){
+                                                                    It right,
+                                                                    std::size_t start,
+                                                                    const std::vector<group_t> &groups){
     assert(is_ordered(left, right));
     // store the sorted vector chunks in a temp vector (+1 for the unknowns)
     std::vector<std::vector<typename It::value_type>> chunks(groups.size()+1);
@@ -435,7 +430,7 @@ std::vector<typename ABDTree<N>::bound_t> ABDTree<N>::sort_by_group(It left,
                 unknown = false;
             }
         }
-        if(unknown) chunks[chunks.size()-1].push_back(*it);
+        if(unknown) chunks.back().push_back(*it);
     }
     // recompose the range, now ordered, and generate the bounds wrt the item index
     std::vector<bound_t> bounds;
@@ -461,7 +456,7 @@ void ABDTree<N>::unknown_stats(const node_cptr_t node,
     for(const auto &s : group_stats)
         it_stats.push_back(s.cbegin());
     // pass over all the stats simultaneously and
-    // compute the stats for the unknown branch of the treee
+    // compute the stats for the unknown branch of the tree
     for(const auto &parent_stats : node->_stats){
         // retrieve current node's stats
         const auto &item = parent_stats.first;

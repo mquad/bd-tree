@@ -1,5 +1,5 @@
 #include "metrics.hpp"
-#include "rank-tree.hpp"
+#include "rank_tree.hpp"
 #include "stopwatch.hpp"
 #include "d_tree_eval.hpp"
 
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     sw.reset();
     sw.start();
     // build the decision tree
-    using RIndex = RankingIndex<std::size_t, AveragePrecision<10>>;
+    using RIndex = RankIndex<std::size_t, NDCG<50>>;
     RankTree<ABDNode, RIndex> bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff};
     bdtree.init(Rating::read_from(training_file, sz_hint));
     auto init_t = sw.elapsed_ms();
@@ -43,6 +43,10 @@ int main(int argc, char **argv)
     // evaluate tree quality
     double rmse_val = evaluate<decltype(bdtree)>(bdtree, query_profiles, test_profiles, rmse);
     std::cout << "RMSE: " << rmse_val << std::endl;
+    double map = evaluate_ranking<decltype(bdtree), AveragePrecision<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "MAP: " << map << std::endl;
+    double ndcg = evaluate_ranking<decltype(bdtree), NDCG<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "NDCG: " << ndcg << std::endl;
     std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
     return 0;
 }

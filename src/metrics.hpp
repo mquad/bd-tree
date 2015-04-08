@@ -14,7 +14,6 @@
 template<typename Key = unsigned long>
 struct RMSE{
     static double eval(const std::vector<double> &actual, const std::vector<double> &predicted){
-        assert(actual.size() == predicted.size());
         double se{.0};
         for(std::size_t idx{0u}; idx < actual.size(); ++idx)
             se += std::pow(actual[idx] - predicted[idx], 2);
@@ -34,7 +33,7 @@ struct AveragePrecision{
     static double eval(const std::vector<Key> &ranking, const std::unordered_set<Key> &relevant){
         double ap{.0};
         std::size_t rel_count{0}, rank{1};
-        auto it_end = ranking.size() < N ? ranking.cbegin() + N : ranking.cend();
+        auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
         for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
             if(relevant.count(*it) > 0)
                 ap += (double) ++rel_count / rank;
@@ -43,20 +42,23 @@ struct AveragePrecision{
     }
 };
 
-template<usinged N = 10, typename Key = unsigned long>
+template<unsigned N = 10, typename Key = unsigned long>
 struct NDCG{
-    static double eval(const std::vector<Key> &ranking, const std::unordered_map<Key> &relevant){
+    static double eval(const std::vector<Key> &ranking, const std::unordered_set<Key> &relevant){
         double dcg{.0}, idcg{.0};
         std::size_t rank{1};
         // Discounted Cumulative Gain
-        auto it_end = ranking.size() < N ? ranking.cbegin() + N : ranking.cend();
+        auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
         for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
-            if(relevant.count(*it) > 0)
+            if(relevant.count(*it) > 0){
                 dcg += 1.0 / std::log2(rank+1);
+            }
         }
-        // Ideal Discounted Cumultaive Gain
-        for(rank = 1; rank < relevant.size(); ++rank)
+        std::size_t max_rank = relevant.size() > N ? N : relevant.size();
+        // Ideal Discounted Cumulative Gain
+        for(rank = 1; rank <= max_rank; ++rank){
             idcg += 1.0 / std::log2(rank+1);
+        }
         return dcg / idcg;
     }
 };

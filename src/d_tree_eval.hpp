@@ -5,9 +5,11 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include "d_tree.hpp"
+#include "metrics.hpp"
 
-using user_profiles_t = std::unordered_map<std::size_t, profile_t>;
+using user_profiles_t = std::unordered_map<unsigned long, profile_t>;
 
 double build_profiles(const std::string &filename, user_profiles_t &profiles){
     std::ifstream ifs(filename);
@@ -50,17 +52,34 @@ double evaluate(const T &dtree,
                 const user_profiles_t &query,
                 const user_profiles_t &test,
                 double (*metric)(const T&, const profile_t&, const profile_t&)){
-    double metric_sum{};
-    std::size_t n{query.size()};
-    std::cout << "EVALUATION" << std::endl;
-    std::cout << "Num.users: " << query.size() << std::endl;
+    double metric_sum{.0};
+    std::size_t n{0};
     for(const auto &ans : query){
-        if(test.count(ans.first) > 0)
+        if(test.count(ans.first) > 0){
             metric_sum += metric(dtree, ans.second, test.at(ans.first));
+            ++n;
+        }
     }
     return metric_sum / n;
-
 }
 
+template<typename T, typename Metric, int RelTh = 4>
+double evaluate_ranking(const T &dtree,
+                        const user_profiles_t &query,
+                        const user_profiles_t &test){
+    double metric_sum{.0};
+    int n{0};
+    for(const auto &ans : query){
+        if(test.count(ans.first) > 0){
+            std::unordered_set<unsigned long> relevant_test;
+            for(const auto &entry : test.at(ans.first))
+                if(entry.second >= RelTh)   relevant_test.insert(entry.first);
+            const auto leaf = dtree.traverse(ans.second);
+            metric_sum += Metric::eval(dtree.ranking(leaf), relevant_test);
+            ++n;
+        }
+    }
+    return metric_sum / n;
+}
 
 #endif // EVALUATION_HPP
