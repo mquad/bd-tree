@@ -213,10 +213,10 @@ public:
     void init(const std::vector<Rating> &training_data) override;
     node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const override;
 
-    double predict(const node_cptr_t node, const id_t item_id) const{
+    double predict(const node_cptr_t node, const id_t item_id) const override{
         return node->prediction(item_id);
     }
-    std::vector<id_t> ranking(const node_cptr_t node) const{
+    std::vector<id_t> ranking(const node_cptr_t node) const override{
         return node->_rank;
     }
 
