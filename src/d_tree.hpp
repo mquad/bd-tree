@@ -35,7 +35,11 @@ public:
     virtual void build() = 0;
     virtual void init(const std::vector<Rating> &training_data) = 0;
     void gdt_r(node_ptr_t node);
-    virtual node_cptr_t traverse(const profile_t &answers) const = 0;
+    virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
+
+    node_ptr_t root()           {return _root.get();}
+    node_ptr_t root() const     {return _root.get();}
+    unsigned depth_max() const  {return _depth_max;}
 
 protected:
     virtual void compute_root_quality(node_ptr_t node) = 0;

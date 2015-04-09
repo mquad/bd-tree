@@ -29,8 +29,8 @@ int main(int argc, char **argv)
     sw.reset();
     sw.start();
     // build the decision tree
-    using RIndex = RankIndex<std::size_t, NDCG<50>>;
-    RankTree<ABDNode, RIndex> bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff};
+    using RIndex = RankIndex<std::size_t, Precision<50>>;
+    RankTree<RIndex> bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff};
     bdtree.init(Rating::read_from(training_file, sz_hint));
     auto init_t = sw.elapsed_ms();
     std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
@@ -41,12 +41,16 @@ int main(int argc, char **argv)
     build_profiles(query_file, query_profiles);
     build_profiles(test_file, test_profiles);
     // evaluate tree quality
-    double rmse_val = evaluate<decltype(bdtree)>(bdtree, query_profiles, test_profiles, rmse);
-    std::cout << "RMSE: " << rmse_val << std::endl;
-    double map = evaluate_ranking<decltype(bdtree), AveragePrecision<50>>(bdtree, query_profiles, test_profiles);
-    std::cout << "MAP: " << map << std::endl;
-    double ndcg = evaluate_ranking<decltype(bdtree), NDCG<50>>(bdtree, query_profiles, test_profiles);
-    std::cout << "NDCG: " << ndcg << std::endl;
+    auto rmse = evaluate_error<decltype(bdtree), RMSE<>>(bdtree, query_profiles, test_profiles);
+    std::cout << "RMSE: "; print_range(std::cout, rmse.cbegin(), rmse.cend()) << std::endl;
+    auto p = evaluate_ranking<decltype(bdtree), Precision<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "Precision@50: "; print_range(std::cout, p.cbegin(), p.cend()) << std::endl;
+    auto map = evaluate_ranking<decltype(bdtree), AveragePrecision<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "MAP@50: "; print_range(std::cout, map.cbegin(), map.cend()) << std::endl;
+    auto ndcg = evaluate_ranking<decltype(bdtree), NDCG<50>>(bdtree, query_profiles, test_profiles);
+    std::cout << "NDCG@50: "; print_range(std::cout, ndcg.cbegin(), ndcg.cend()) << std::endl;
+    auto hlu = evaluate_ranking<decltype(bdtree), HLU<50,5>>(bdtree, query_profiles, test_profiles);
+    std::cout << "HLU@50: "; print_range(std::cout, hlu.cbegin(), hlu.cend()) << std::endl;
     std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
     return 0;
 }

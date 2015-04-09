@@ -45,18 +45,18 @@ public:
     }
 };
 
-template<typename Node, typename R>
-class RankTree : public ABDTree<Node>{
+template<typename R>
+class RankTree : public ABDTree{
 protected:
-    using typename ABDTree<Node>::id_t;
-    using typename ABDTree<Node>::index_t;
-    using typename ABDTree<Node>::node_ptr_t;
-    using typename ABDTree<Node>::node_cptr_t;
-    using typename ABDTree<Node>::stat_map_t;
+    using ABDTree::id_t;
+    using ABDTree::index_t;
+    using ABDTree::node_ptr_t;
+    using ABDTree::node_cptr_t;
+    using ABDTree::stat_map_t;
 
 public:
     // inherith the constructor
-    using ABDTree<Node>::ABDTree;
+    using ABDTree::ABDTree;
     ~RankTree(){}
 
     void init(const std::vector<Rating> &training_data) override{
@@ -64,7 +64,7 @@ public:
         for(const auto &rat : training_data){
             _ranking_index.insert(rat._user_id, rat._item_id, rat._value);
         }
-        ABDTree<Node>::init(training_data);
+        ABDTree::init(training_data);
         // initialize root _users member
         this->_root->_users.reserve(_user_index.size());
         for(const auto &entry : _user_index)
@@ -87,14 +87,14 @@ protected:
                          std::vector<stat_map_t> &g_stats) const override;
     void unknown_users(const node_cptr_t node, std::vector<group_t> &groups) const;
 protected:
-    using ABDTree<Node>::unknown_stats;
-    using ABDTree<Node>::_item_index;
-    using ABDTree<Node>::_user_index;
+    using ABDTree::unknown_stats;
+    using ABDTree::_item_index;
+    using ABDTree::_user_index;
     R _ranking_index;
 };
 
-template<typename N, typename R>
-void RankTree<N, R>::compute_root_quality(node_ptr_t node){
+template<typename R>
+void RankTree<R>::compute_root_quality(node_ptr_t node){
     double q{.0};
     std::vector<id_t> ranks = build_ranking(node->_stats);
     for(const auto &entry : _ranking_index)
@@ -102,8 +102,8 @@ void RankTree<N, R>::compute_root_quality(node_ptr_t node){
     node->_quality = q;
 }
 
-template<typename N, typename R>
-void RankTree<N, R>::split(node_ptr_t node,
+template<typename R>
+void RankTree<R>::split(node_ptr_t node,
                              const id_t splitter_id,
                              const double splitter_quality,
                              std::vector<group_t> &groups,
@@ -115,7 +115,7 @@ void RankTree<N, R>::split(node_ptr_t node,
     std::vector<group_t> base_groups(groups.size()-1);
     std::copy(groups.cbegin(), groups.cend()-1, base_groups.begin());
 
-    ABDTree<N>::split(node, splitter_id, splitter_quality, base_groups, g_qualities, g_stats);
+    ABDTree::split(node, splitter_id, splitter_quality, base_groups, g_qualities, g_stats);
     // explicitly save the ids of the users of each children node
     for(std::size_t gidx{0u}; gidx < groups.size(); ++gidx)
         node->_children[gidx]->_users.swap(groups[gidx]);
@@ -125,8 +125,8 @@ void RankTree<N, R>::split(node_ptr_t node,
     assert(node->_children[2]->_users.size() == node->_children[2]->_num_users);
 }
 
-template<typename N, typename R>
-double RankTree<N, R>::split_quality(const node_cptr_t node,
+template<typename R>
+double RankTree<R>::split_quality(const node_cptr_t node,
                                      const id_t splitter_id,
                                      std::vector<group_t> &groups,
                                      std::vector<double> &g_qualities,
@@ -170,8 +170,8 @@ double RankTree<N, R>::split_quality(const node_cptr_t node,
     return quality;
 }
 
-template<typename N, typename R>
-void RankTree<N, R>::unknown_users(const node_cptr_t node,
+template<typename R>
+void RankTree<R>::unknown_users(const node_cptr_t node,
                                       std::vector<group_t> &groups) const{
     groups.push_back(node->_users); //init with parent's users
     auto &unknown_users = groups.back();

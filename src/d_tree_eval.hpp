@@ -4,12 +4,11 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
-#include <unordered_map>
 #include <unordered_set>
 #include "d_tree.hpp"
 #include "metrics.hpp"
 
-using user_profiles_t = std::unordered_map<unsigned long, profile_t>;
+using user_profiles_t = std::map<unsigned long, profile_t>;
 
 double build_profiles(const std::string &filename, user_profiles_t &profiles){
     std::ifstream ifs(filename);
@@ -30,56 +29,61 @@ double build_profiles(const std::string &filename, user_profiles_t &profiles){
     return sum / n;
 }
 
-template<typename T>
-double rmse(const T &dtree, const profile_t &answers, const profile_t &test){
-    double mse{0};
-    std::size_t n{0};
-    const auto leaf = dtree.traverse(answers);
-    for(const auto &ans : test){
-        try{
-            double pred_r = dtree.predict(leaf, ans.first);
-            double actual_r = ans.second;
-            mse += std::pow(pred_r - actual_r, 2);
-            ++n;
-        }catch(std::out_of_range &){
-        }
-    }
-    return std::sqrt(mse / n);
-}
-
-template<typename T>
-double evaluate(const T &dtree,
-                const user_profiles_t &query,
-                const user_profiles_t &test,
-                double (*metric)(const T&, const profile_t&, const profile_t&)){
-    double metric_sum{.0};
-    std::size_t n{0};
-    for(const auto &ans : query){
+template<typename T, typename Metric>
+std::vector<double> evaluate_error(const T &dtree,
+                                     const user_profiles_t &answers,
+                                     const user_profiles_t &test){
+    std::vector<double> metric_avg(dtree.depth_max(), .0);
+    std::vector<int> counts(dtree.depth_max(), 0);
+    for(const auto &ans : answers){
         if(test.count(ans.first) > 0){
-            metric_sum += metric(dtree, ans.second, test.at(ans.first));
-            ++n;
+            unsigned level{0u};
+            auto node = dtree.root();
+            while(node != nullptr){
+                profile_t predicted;
+                for(const auto &t : test.at(ans.first)){
+                    try{
+                        predicted.emplace(t.first, dtree.predict(node, t.first));
+                    }catch(std::out_of_range &){}
+                }
+                metric_avg[level] += Metric::eval(predicted, test.at(ans.first));
+                ++counts[level];
+                node = dtree.traverse(node, ans.second);
+                ++level;
+            }
         }
     }
-    return metric_sum / n;
+    std::transform(metric_avg.begin(), metric_avg.end(),
+                   counts.begin(), metric_avg.begin(),
+                   [](const double &sum, const int &count){return sum / count;});
+    return metric_avg;
 }
 
 template<typename T, typename Metric, int RelTh = 4>
-double evaluate_ranking(const T &dtree,
-                        const user_profiles_t &query,
-                        const user_profiles_t &test){
-    double metric_sum{.0};
-    int n{0};
-    for(const auto &ans : query){
+std::vector<double> evaluate_ranking(const T &dtree,
+                                     const user_profiles_t &answers,
+                                     const user_profiles_t &test){
+    std::vector<double> metric_avg(dtree.depth_max(), .0);
+    std::vector<int> counts(dtree.depth_max(), 0);
+    for(const auto &ans : answers){
         if(test.count(ans.first) > 0){
             std::unordered_set<unsigned long> relevant_test;
             for(const auto &entry : test.at(ans.first))
                 if(entry.second >= RelTh)   relevant_test.insert(entry.first);
-            const auto leaf = dtree.traverse(ans.second);
-            metric_sum += Metric::eval(dtree.ranking(leaf), relevant_test);
-            ++n;
+            unsigned level{0u};
+            auto node = dtree.root();
+            while(node != nullptr){
+                metric_avg[level] += Metric::eval(dtree.ranking(node), relevant_test);
+                ++counts[level];
+                node = dtree.traverse(node, ans.second);
+                ++level;
+            }
         }
     }
-    return metric_sum / n;
+    std::transform(metric_avg.begin(), metric_avg.end(),
+                   counts.begin(), metric_avg.begin(),
+                   [](const double &sum, const int &count){return sum / count;});
+    return metric_avg;
 }
 
 #endif // EVALUATION_HPP
