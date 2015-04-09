@@ -70,6 +70,7 @@ std::vector<double> evaluate_ranking(const T &dtree,
             std::unordered_set<unsigned long> relevant_test;
             for(const auto &entry : test.at(ans.first))
                 if(entry.second >= RelTh)   relevant_test.insert(entry.first);
+            if(relevant_test.size() == 0)   continue;
             unsigned level{0u};
             auto node = dtree.root();
             while(node != nullptr){
