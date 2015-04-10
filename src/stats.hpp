@@ -1,5 +1,6 @@
 #ifndef STATS_HPP
 #define STATS_HPP
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <vector>
@@ -102,9 +103,9 @@ std::vector<K> build_ranking(const StatMap<K, S> &stats, const std::map<K, doubl
     std::vector<std::pair<K, double>> items_by_score;
     items_by_score.reserve(parent_scores.size());
     for(const auto &p_pred : parent_scores){
-        try{
+        if(stats.count(p_pred.first) > 0){
             items_by_score.emplace_back(p_pred.first, stats.at(p_pred.first).score(p_pred.second, h_smooth));
-        }catch(std::out_of_range &){
+        }else{
             items_by_score.emplace_back(p_pred.first, p_pred.second);
         }
     }

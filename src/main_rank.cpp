@@ -2,6 +2,7 @@
 #include "rank_tree.hpp"
 #include "stopwatch.hpp"
 #include "d_tree_eval.hpp"
+
 constexpr unsigned N = 50;
 using PrecIndex = RankIndex<std::size_t, Precision<N>>;
 using APIndex = RankIndex<std::size_t, AveragePrecision<N>>;

@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include "abd_tree.hpp"
 #include "aux.hpp"
+#include "stopwatch.hpp"
 
 template<typename Key, typename Metric, int RelTh = 4>
 struct RankIndex{
@@ -131,6 +132,9 @@ double RankTree<R>::split_quality(const node_cptr_t node,
                                      std::vector<group_t> &groups,
                                      std::vector<double> &g_qualities,
                                      std::vector<stat_map_t> &g_stats) const{
+    stopwatch sw;
+    sw.reset(); sw.start();
+
     groups.clear();
     g_qualities.clear();
     g_stats.clear();

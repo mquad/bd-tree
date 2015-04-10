@@ -1,7 +1,5 @@
 #ifndef EVALUATION_HPP
 #define EVALUATION_HPP
-
-#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
@@ -33,8 +31,8 @@ template<typename T, typename Metric>
 std::vector<double> evaluate_error(const T &dtree,
                                      const user_profiles_t &answers,
                                      const user_profiles_t &test){
-    std::vector<double> metric_avg(dtree.depth(), .0);
-    std::vector<int> counts(dtree.depth(), 0);
+    std::vector<double> metric_avg(dtree.depth_max(), .0);
+    std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
         if(test.count(ans.first) > 0){
             unsigned level{0u};
@@ -55,7 +53,11 @@ std::vector<double> evaluate_error(const T &dtree,
     }
     std::transform(metric_avg.begin(), metric_avg.end(),
                    counts.begin(), metric_avg.begin(),
-                   [](const double &sum, const int &count){return sum / count;});
+                   [](const double &sum, const int &count){return count > 0 ? sum / count : -1;});
+    // remove trailing elements
+    auto it = metric_avg.begin();
+    while(it != metric_avg.end() && *it != -1) ++it;
+    metric_avg.resize(std::distance(metric_avg.begin(), it));
     return metric_avg;
 }
 
@@ -63,8 +65,8 @@ template<typename T, typename Metric, int RelTh = 4>
 std::vector<double> evaluate_ranking(const T &dtree,
                                      const user_profiles_t &answers,
                                      const user_profiles_t &test){
-    std::vector<double> metric_avg(dtree.depth(), .0);
-    std::vector<int> counts(dtree.depth(), 0);
+    std::vector<double> metric_avg(dtree.depth_max(), .0);
+    std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
         if(test.count(ans.first) > 0){
             std::unordered_set<unsigned long> relevant_test;
@@ -83,7 +85,11 @@ std::vector<double> evaluate_ranking(const T &dtree,
     }
     std::transform(metric_avg.begin(), metric_avg.end(),
                    counts.begin(), metric_avg.begin(),
-                   [](const double &sum, const int &count){return sum / count;});
+                   [](const double &sum, const int &count){return count > 0 ? sum / count : -1;});
+    // remove trailing elements
+    auto it = metric_avg.begin();
+    while(it != metric_avg.end() && *it != -1) ++it;
+    metric_avg.resize(std::distance(metric_avg.begin(), it));
     return metric_avg;
 }
 

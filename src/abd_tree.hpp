@@ -122,18 +122,18 @@ void ABDNode::cache_pred_rank(const double h_smooth){
     if(_parent != nullptr){
         // user average prediction
         for(const auto &p_pred : _parent->_pred_rating){
-            try{
+            if(_stats.count(p_pred.first) > 0){
                 _pred_rating.emplace(p_pred.first, _stats.at(p_pred.first).pred(p_pred.second, h_smooth));
-            }catch(std::out_of_range &){
+            }else{
                 _pred_rating.emplace(p_pred.first, p_pred.second);
             }
         }
         // user unbiased average prediction
         // i.e., average deviation from the user average prediction
         for(const auto &p_score : _parent->_scores){
-            try{
+            if(_stats.count(p_score.first) > 0){
                 _scores.emplace(p_score.first, _stats.at(p_score.first).score(p_score.second, h_smooth));
-            }catch(std::out_of_range &){
+            }else{
                 _scores.emplace(p_score.first, p_score.second);
             }
         }

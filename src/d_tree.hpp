@@ -4,11 +4,12 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
+#include <omp.h>
 #include "ratings.hpp"
 #include "stats.hpp"
 #include "types.hpp"
+#include "stopwatch.hpp"
 #include "../util/basic_log.hpp"
-
 template<typename N>
 class DTree{
 public:
@@ -25,7 +26,7 @@ public:
           const double rand_coeff = 10,
           const BasicLogger &log = BasicLogger{std::cout}):
         _root{nullptr}, _mt{nullptr},
-        _depth{1u}, _depth_max{depth_max}, _ratings_min{ratings_min}, _num_threads{num_threads},
+        _depth_max{depth_max}, _ratings_min{ratings_min}, _num_threads{num_threads},
         _randomize{randomize}, _rand_coeff{rand_coeff},
         _log{log}{}
 
@@ -41,7 +42,7 @@ public:
 
     node_ptr_t root()           {return _root.get();}
     node_ptr_t root() const     {return _root.get();}
-    unsigned depth() const      {return _depth;}
+    unsigned depth_max() const  {return _depth_max;}
 
 protected:
     virtual void compute_root_quality(node_ptr_t node) = 0;
@@ -70,7 +71,6 @@ protected:
 protected:
     std::unique_ptr<N> _root;
     std::unique_ptr<std::mt19937> _mt;
-    unsigned _depth;
     unsigned _depth_max;
     std::size_t _ratings_min;
     unsigned _num_threads;
@@ -97,9 +97,12 @@ void DTree<N>::gdt_r(node_ptr_t node){
     std::vector<double> g_qualities{};
     std::vector<stat_map_t> g_stats{};
 
+    stopwatch sw;
+    sw.reset();sw.start();
     find_splitter(node, splitter, quality, groups, g_qualities, g_stats);
-
-    _log.node(node->_id, node->_level) << "Splitter id: " << splitter
+    sw.stop();
+    _log.node(node->_id, node->_level) << "Splitter found in " << sw.elapsed_ms() / 1000.0 << " sec."
+                                       << "\tId: " << splitter
                                        << "\tQuality: " << quality << std::endl;
 
     if(quality <= node->_quality){
@@ -107,7 +110,6 @@ void DTree<N>::gdt_r(node_ptr_t node){
         return;
     }
     split(node, splitter, quality, groups, g_qualities, g_stats);
-    ++_depth;
     //recursive call
     for(auto &child : node->_children){
         this->_log.node(child->_id, child->_level)
@@ -136,7 +138,6 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         std::vector<group_t> c_groups;
         std::vector<double> c_qualities;
         std::vector<stat_map_t> c_stats;
-
         // compute the qualiy of each candidate in parallel
     #pragma omp parallel num_threads(_num_threads) private(c_groups, c_qualities, c_stats)
         {
