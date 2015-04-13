@@ -12,24 +12,25 @@ using HLUIndex = RankIndex<std::size_t, HLU<N>>;
 int main(int argc, char **argv)
 {
     if(argc < 15){
-        std::cout << "Usage: ./bdtree_rank <metric> <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <size-hint> <outfile>" << std::endl;
+        std::cout << "Usage: ./bdtree_rank <metric> <cv> <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <size-hint> <outfile>" << std::endl;
         return 1;
     }
     std::string metric(argv[1]);
-    std::string training_file(argv[2]);
-    std::string validation_file(argv[3]);
-    std::string query_file(argv[4]);
-    std::string test_file(argv[5]);
-    double lambda = std::strtod(argv[6], nullptr);
-    double h_smoothing = std::strtod(argv[7], nullptr);
-    unsigned max_depth = std::strtoul(argv[8], nullptr, 10);
-    std::size_t min_ratings = std::strtoull(argv[9], nullptr, 10);
-    std::size_t top_pop = std::strtoull(argv[10], nullptr, 10);
-    unsigned num_threads = std::strtoul(argv[11], nullptr, 10);
-    bool randomize = std::strtol(argv[12], nullptr, 10);
-    double rand_coeff = std::strtod(argv[13], nullptr);
-    std::size_t sz_hint = std::strtoull(argv[14], nullptr, 10);
-    std::string outfile(argv[15]);
+    bool use_cv = std::strtol(argv[2], nullptr, 10);
+    std::string training_file(argv[3]);
+    std::string validation_file(argv[4]);
+    std::string query_file(argv[5]);
+    std::string test_file(argv[6]);
+    double lambda = std::strtod(argv[7], nullptr);
+    double h_smoothing = std::strtod(argv[8], nullptr);
+    unsigned max_depth = std::strtoul(argv[9], nullptr, 10);
+    std::size_t min_ratings = std::strtoull(argv[10], nullptr, 10);
+    std::size_t top_pop = std::strtoull(argv[11], nullptr, 10);
+    unsigned num_threads = std::strtoul(argv[12], nullptr, 10);
+    bool randomize = std::strtol(argv[13], nullptr, 10);
+    double rand_coeff = std::strtod(argv[14], nullptr);
+    std::size_t sz_hint = std::strtoull(argv[15], nullptr, 10);
+    std::string outfile(argv[16]);
 
     std::ofstream ofs(outfile);
 
@@ -54,7 +55,11 @@ int main(int argc, char **argv)
     }else{
         std::cerr << "Unknown metric. Valid values are: prec, ap, ndcg, hlu." << std::endl;
     }
-    bdtree->init(Rating::read_from(training_file, sz_hint));
+
+    if(use_cv)
+        bdtree->init(Rating::read_from(validation_file, sz_hint));
+    else
+        bdtree->init(Rating::read_from(training_file, sz_hint));
     auto init_t = sw.elapsed_ms();
     std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
     bdtree->build();

@@ -63,8 +63,20 @@ public:
     using ABDTree::ABDTree;
     ~RankTree(){}
 
-    void init(const std::vector<Rating> &training_data) override{
+    void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data){
         // initialize the validation index with the validation data
+        for(const auto &rat : validation_data){
+            _ranking_index.insert(rat._user_id, rat._item_id, rat._value);
+        }
+        ABDTree::init(training_data);
+        // initialize root _users member
+        this->_root->_users.reserve(_user_index.size());
+        for(const auto &entry : _user_index)
+            this->_root->_users.push_back(entry.first);
+
+    }
+
+    void init(const std::vector<Rating> &training_data) override{
         for(const auto &rat : training_data){
             _ranking_index.insert(rat._user_id, rat._item_id, rat._value);
         }

@@ -35,6 +35,7 @@ public:
     virtual ~DTree(){}
     virtual void build() = 0;
     virtual void init(const std::vector<Rating> &training_data) = 0;
+    virtual void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data) = 0;
     void gdt_r(node_ptr_t node);
 
     virtual profile_t predict(const node_cptr_t node,

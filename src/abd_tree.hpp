@@ -188,6 +188,7 @@ public:
     using DTree<ABDNode>::gdt_r;
 
     void build() override;
+    void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data) override;
     void init(const std::vector<Rating> &training_data) override;
     node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const override;
 
@@ -244,6 +245,12 @@ protected:
     std::size_t _top_pop;
     unsigned _node_counter;
 };
+
+void ABDTree::init(const std::vector<Rating> &training_data, __attribute__((unused)) const std::vector<Rating> &validation_data){
+    //NOTE: This method simply calls the standard initialization
+    //Cross-validation was not considered in the original Golbandi et al. work.
+    init(training_data);
+}
 
 void ABDTree::init(const std::vector<Rating> &training_data){
     double global_mean{0};
