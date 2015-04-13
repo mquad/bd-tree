@@ -1,7 +1,8 @@
 #ifndef METRICS_HPP
 #define METRICS_HPP
+#include <algorithm>
 #include <vector>
-#include <unordered_set>
+#include <unordered_map>
 #include <iostream>
 #include "aux.hpp"
 #include "types.hpp"
@@ -12,7 +13,7 @@
  *
  * ****************/
 
-template<typename Key = unsigned long>
+template<typename Key = std::size_t>
 struct RMSE{
     static double eval(const profile_t &predicted, const profile_t &actual){
         double sq_err{.0};
@@ -34,72 +35,90 @@ struct RMSE{
  *
  * ****************/
 
-template<std::size_t N = 10, typename Key = unsigned long>
+template<std::size_t N = 10, int RelTh = 4, typename Key = std::size_t>
 struct Precision{
-    static double eval(const std::vector<Key> &ranking, const std::unordered_set<Key> &relevant){
+    static double eval(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
         std::size_t rel_count{0};
         auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
         auto length = std::distance(ranking.cbegin(), it_end);
         for(auto it = ranking.cbegin(); it != it_end; ++it){
-            if(relevant.count(*it) > 0) ++rel_count;
+            if(relevance.count(*it) > 0 &&
+                    relevance.at(*it) >= RelTh)
+                ++rel_count;
         }
         return (double) rel_count / length;
     }
 };
 
-template<std::size_t N = 10, typename Key = unsigned long>
+template<std::size_t N = 10, int RelTh = 4, typename Key = std::size_t>
 struct AveragePrecision{
-    static double eval(const std::vector<Key> &ranking, const std::unordered_set<Key> &relevant){
+    static double eval(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
         double p_at_k{.0};
-        std::size_t rel_count{0}, rank{1};
-        auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
-        for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
-            if(relevant.count(*it) > 0)
-                p_at_k += (double) ++rel_count / rank;
+        std::size_t num_relevant{0};
+        for(const auto &entry : relevance)
+            if(entry.second >= RelTh)
+                ++num_relevant;
+
+        if(num_relevant > 0){
+            std::size_t rel_count{0}, rank{1};
+            auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
+            for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
+                if(relevance.count(*it) > 0 &&
+                        relevance.at(*it) >= RelTh)
+                    p_at_k += (double) ++rel_count / rank;
+            }
+            return p_at_k / num_relevant;
+        } else {
+            return 0;
         }
-        return p_at_k / relevant.size();
     }
 };
 
-template<std::size_t N = 10, typename Key = unsigned long>
+template<std::size_t N = 10, typename Key = std::size_t>
 struct NDCG{
-    static double eval(const std::vector<Key> &ranking, const std::unordered_set<Key> &relevant){
-        double dcg{.0}, idcg{.0};
+    static double eval(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
+        // best achievable ranking
+        std::vector<Key> best_ranking(extract_keys(relevance));
+        std::sort(best_ranking.begin(), best_ranking.end(),
+                  [&](const Key &lhs, const Key &rhs){
+            return relevance.at(lhs) > relevance.at(rhs);
+        });
+        return DCG(ranking, relevance) / DCG(best_ranking, relevance);
+    }
+private:
+    static double DCG(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
+        double dcg{.0};
         std::size_t rank{1};
-        // Discounted Cumulative Gain
         auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
         for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
-            if(relevant.count(*it) > 0){
-                dcg += 1.0 / std::log2(rank+1);
-            }
+            if(relevance.count(*it) > 0)
+                dcg += (std::pow(2, relevance.at(*it))-1) / std::log2(rank+1);
         }
-        std::size_t max_rank = relevant.size() > N ? N : relevant.size();
-        // Ideal Discounted Cumulative Gain
-        for(rank = 1; rank <= max_rank; ++rank){
-            idcg += 1.0 / std::log2(rank+1);
-        }
-        return dcg / idcg;
+        return dcg;
     }
 };
 
-template<std::size_t N = 10, unsigned HL = 5, typename Key = unsigned long>
+template<std::size_t N = 10, unsigned HL = 5, typename Key = std::size_t>
 struct HLU{
-    static double eval(const std::vector<Key> &ranking, const std::unordered_set<Key> &relevant){
-        double hlu{.0}, hlu_max{.0};
+    static double eval(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
+        // best achievable ranking
+        std::vector<Key> best_ranking(extract_keys(relevance));
+        std::sort(best_ranking.begin(), best_ranking.end(),
+                  [&](const Key &lhs, const Key &rhs){
+            return relevance.at(lhs) > relevance.at(rhs);
+        });
+        return _HLU(ranking, relevance) / _HLU(best_ranking, relevance);
+    }
+private:
+    static double _HLU(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
+        double hlu{.0};
         std::size_t rank{1};
-        // Half Life Utility
         auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
         for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
-            if(relevant.count(*it) > 0){
-                hlu += 1.0 / std::pow(2, (rank-1) / (HL-1));
-            }
+            if(relevance.count(*it) > 0)
+                hlu += relevance.at(*it) / std::pow(2, (rank-1) / (HL-1));
         }
-        std::size_t max_rank = relevant.size() > N ? N : relevant.size();
-        // Maximum Half Life Utility
-        for(rank = 1; rank <= max_rank; ++rank){
-            hlu_max += 1.0 / std::pow(2, (rank-1) / (HL-1));
-        }
-        return hlu / hlu_max;
+        return hlu;
     }
 };
 

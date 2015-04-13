@@ -6,9 +6,9 @@
 #include "aux.hpp"
 #include "stopwatch.hpp"
 
-template<typename Key, typename Metric, int RelTh = 4>
+template<typename Key, typename Metric>
 struct RankIndex{
-    using entry_t = std::unordered_set<Key>;
+    using entry_t = std::unordered_map<Key, double>;
 protected:
     std::map<Key, entry_t> _index;
 public:
@@ -24,18 +24,21 @@ public:
     decltype(_index.cend()) cend() const        {return _index.cend();}
 
     void insert(const Key &key, const Key &item, const double &rating){
-        if(rating >= RelTh)
-            _index[key].insert(item);
+        _index[key].emplace(item, rating);
+    }
+
+    double evaluate_all(const std::vector<Key> &ranking){
+        double q{.0};
+        for(const auto &entry : _index)
+            q += Metric::eval(ranking, entry.second);
+        return q;
     }
 
     double evaluate(const std::vector<Key> &ranking, const std::vector<Key> &users) const{
         double m{.0};
         for(const auto &u : users)
-        {
-            try{
+            if(_index.count(u) > 0)
                 m += Metric::eval(ranking, _index.at(u));
-            }catch(std::out_of_range &){}
-        }
         return m;
     }
 
@@ -96,11 +99,7 @@ protected:
 
 template<typename R>
 void RankTree<R>::compute_root_quality(node_ptr_t node){
-    double q{.0};
-    std::vector<id_t> ranks = build_ranking(node->_stats);
-    for(const auto &entry : _ranking_index)
-        q += _ranking_index.evaluate(ranks, entry.first);
-    node->_quality = q;
+    node->_quality = _ranking_index.evaluate_all(build_ranking(node->_stats));
 }
 
 template<typename R>

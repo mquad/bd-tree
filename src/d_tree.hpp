@@ -36,8 +36,13 @@ public:
     virtual void build() = 0;
     virtual void init(const std::vector<Rating> &training_data) = 0;
     void gdt_r(node_ptr_t node);
-    virtual double predict(const node_cptr_t node, const id_t item_id) const = 0;
-    virtual std::vector<id_t> ranking(const node_cptr_t node) const = 0;
+
+    virtual profile_t predict(const node_cptr_t node,
+                              const std::vector<id_t> &items) const = 0;
+
+    virtual std::vector<id_t> ranking(const node_cptr_t node,
+                                      const std::vector<id_t> &items) const = 0;
+
     virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
 
     node_ptr_t root()           {return _root.get();}

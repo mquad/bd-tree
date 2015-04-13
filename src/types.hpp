@@ -3,7 +3,7 @@
 #include <map>
 #include <vector>
 
-using group_t = std::vector<unsigned long>;
-using profile_t = std::map<unsigned long, double>;
+using group_t = std::vector<std::size_t>;
+using profile_t = std::unordered_map<std::size_t, double>;
 
 #endif // TYPES_HPP

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
+#include "aux.hpp"
 #include "d_tree.hpp"
 #include "metrics.hpp"
 
@@ -35,15 +36,11 @@ std::vector<double> evaluate_error(const T &dtree,
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
         if(test.count(ans.first) > 0){
+            auto test_ids = extract_keys(test.at(ans.first));
             unsigned level{0u};
             auto node = dtree.root();
             while(node != nullptr){
-                profile_t predicted;
-                for(const auto &t : test.at(ans.first)){
-                    try{
-                        predicted.emplace(t.first, dtree.predict(node, t.first));
-                    }catch(std::out_of_range &){}
-                }
+                profile_t predicted = dtree.predict(node, test_ids);
                 metric_avg[level] += Metric::eval(predicted, test.at(ans.first));
                 ++counts[level];
                 node = dtree.traverse(node, ans.second);
@@ -69,14 +66,11 @@ std::vector<double> evaluate_ranking(const T &dtree,
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
         if(test.count(ans.first) > 0){
-            std::unordered_set<unsigned long> relevant_test;
-            for(const auto &entry : test.at(ans.first))
-                if(entry.second >= RelTh)   relevant_test.insert(entry.first);
-            if(relevant_test.size() == 0)   continue;
+            auto test_ids = extract_keys(test.at(ans.first));
             unsigned level{0u};
             auto node = dtree.root();
             while(node != nullptr){
-                metric_avg[level] += Metric::eval(dtree.ranking(node), relevant_test);
+                metric_avg[level] += Metric::eval(dtree.ranking(node, test_ids), test.at(ans.first));
                 ++counts[level];
                 node = dtree.traverse(node, ans.second);
                 ++level;
