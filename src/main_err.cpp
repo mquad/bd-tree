@@ -2,7 +2,7 @@
 #include "stopwatch.hpp"
 #include "d_tree_eval.hpp"
 
-constexpr unsigned N = 20;
+constexpr unsigned N = 10;
 
 int main(int argc, char **argv)
 {
