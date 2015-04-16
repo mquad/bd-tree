@@ -233,6 +233,10 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         quality = chosen.second;
 
         // recompute the groups, qualities and stats for the chosen splitter
+        std::vector<group_t> c_groups;
+        std::vector<double> c_qualities;
+        std::vector<stat_map_t> c_stats;
+
         split_quality(node,splitter,c_groups,c_qualities,c_stats);
 
         groups.swap(c_groups);
