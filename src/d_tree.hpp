@@ -141,12 +141,12 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         std::vector<std::pair<id_t, double>> cand_best_qualities{_num_threads, std::make_pair(id_t{},
                                                                                          std::numeric_limits<double>::lowest())};
 
-        std::vector<group_t> c_groups;
-        std::vector<double> c_qualities;
-        std::vector<stat_map_t> c_stats;
         // compute the qualiy of each candidate in parallel
-    #pragma omp parallel num_threads(_num_threads) private(c_groups, c_qualities, c_stats)
+    #pragma omp parallel num_threads(_num_threads)
         {
+            std::vector<group_t> c_groups;
+            std::vector<double> c_qualities;
+            std::vector<stat_map_t> c_stats;
     #pragma omp single
             {
                 for(auto it_cand = candidates.cbegin(); it_cand != candidates.cend(); ++it_cand){
@@ -185,13 +185,13 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         //to reduce the memory footprint, we store just the candidate qualities, then recompute the groups just for the chosen one
         std::vector<std::pair<id_t, double>> cand_qualities{candidates.size(), std::make_pair(id_t{},
                                                                                               std::numeric_limits<double>::lowest())};
-        std::vector<group_t> c_groups;
-        std::vector<double> c_qualities;
-        std::vector<stat_map_t> c_stats;
 
         // compute the qualiy of each candidate in parallel
-    #pragma omp parallel num_threads(_num_threads) private(c_groups, c_qualities, c_stats)
+    #pragma omp parallel num_threads(_num_threads)
         {
+            std::vector<group_t> c_groups;
+            std::vector<double> c_qualities;
+            std::vector<stat_map_t> c_stats;
     #pragma omp single
             {
                 for(auto it_cand = candidates.cbegin(); it_cand != candidates.cend(); ++it_cand){
