@@ -1,9 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from dtree import ErrorTree
-from random import random
+from dtree import ErrorTree, ErrorTreeTraverser
+from random import random, seed
 
-tree = ErrorTree(ratings_min=1, num_threads=4, depth_max=3, randomize=False)
-tdata = [(int(random()*1000), int(random()*1000), int(random()*4+1)) for i in xrange(0,100000)]
+seed(1)
+nusers = 3000
+nitems = 4000
+density = .0001
+
+tree = ErrorTree(ratings_min=1, num_threads=4, depth_max=4, randomize=True)
+tdata = [(int(random()*nusers), int(random()*nitems), int(random()*4+1)) for i in xrange(0, int(nusers*nitems*density))]
 tree.init(tdata)
-tree.build()
+tree.build([i for i in xrange(0,500)])
+
+traverser = ErrorTreeTraverser(tree)
+print traverser.current_query()
+print traverser.at_leaf()
+traverser.traverse_unknown()
+print traverser.current_query()
+print traverser.at_leaf()
+traverser.traverse_unknown()
+print traverser.current_query()
+print traverser.at_leaf()
+traverser.traverse_unknown()
+print traverser.current_query()
+print traverser.at_leaf()
+

@@ -47,7 +47,7 @@ public:
     virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
 
     node_ptr_t root()           {return _root.get();}
-    node_ptr_t root() const     {return _root.get();}
+    node_ptr_t root() const    {return _root.get();}
     unsigned depth_max() const  {return _depth_max;}
 
 protected:
@@ -139,7 +139,7 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         std::vector<std::vector<double>> cand_g_qualities{_num_threads};
         std::vector<std::vector<stat_map_t>> cand_g_stats{_num_threads};
         std::vector<std::pair<id_t, double>> cand_best_qualities{_num_threads, std::make_pair(id_t{},
-                                                                                         std::numeric_limits<double>::lowest())};
+                                                                                              std::numeric_limits<double>::lowest())};
 
         // compute the qualiy of each candidate in parallel
     #pragma omp parallel num_threads(_num_threads)

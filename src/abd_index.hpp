@@ -33,6 +33,7 @@ public:
 
 public:
     ABDIndex() : _index{}{}
+    ~ABDIndex(){}
 
     // accessors for some basic properties
     std::size_t size() const    {return _index.size();}
@@ -47,6 +48,11 @@ public:
 
     void insert(const Key &key, const score_t &score){
         _index[key].push_back(score);
+    }
+
+    // return the -sorted- key vector
+    std::vector<Key> keys(){
+        return extract_keys(_index);
     }
 
     void sort_all(){

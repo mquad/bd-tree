@@ -52,12 +52,12 @@ public:
 template<typename R>
 class RankTree : public ABDTree{
 protected:
-    using ABDTree::id_t;
     using ABDTree::index_t;
+    using ABDTree::stat_map_t;
+public:
+    using ABDTree::id_t;
     using ABDTree::node_ptr_t;
     using ABDTree::node_cptr_t;
-    using ABDTree::stat_map_t;
-
 public:
     // inherith the constructor
     using ABDTree::ABDTree;

@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup, Extension
+#from distutils.core import setup, Extension
 import os
 import sys
 
