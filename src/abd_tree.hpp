@@ -12,10 +12,10 @@ struct ABDNode{
     using stat_map_t = StatMap<id_t, ABDStats>;
 
     ABDNode(const ABDNode* parent,
-            const std::vector<ABDNode*> &children,
             id_t id,
             id_t splitter_id,
             bool is_unknown,
+            bool is_leaf,
             unsigned level,
             double quality,
             double split_quality,
@@ -24,15 +24,13 @@ struct ABDNode{
             std::size_t top_pop,
             const stat_map_t &stats,
             const std::map<id_t, double> &pred_rating,
-            const std::map<id_t, double> &pred_rating_unbiased):
+            const std::map<id_t, double> &pred_rating_unbiased,
+            const std::vector<id_t> &candidates):
         _parent{parent}, _children{},
-        _id{id}, _splitter_id{splitter_id}, _is_unknown{is_unknown},
+        _id{id}, _splitter_id{splitter_id}, _is_unknown{is_unknown}, _is_leaf{is_leaf},
         _level{level}, _quality{quality}, _split_quality{split_quality},
         _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
-        _stats{stats}, _predictions{pred_rating}, _scores{pred_rating_unbiased}, _users{}{
-        for(auto node : children)
-            _children.push_back(std::unique_ptr<ABDNode>(node));
-    }
+        _stats{stats}, _predictions{pred_rating}, _scores{pred_rating_unbiased}, _candidates{candidates}, _users{}{ }
 
     ABDNode(id_t id,
             unsigned level,
@@ -41,10 +39,10 @@ struct ABDNode{
             std::size_t top_pop,
             const stat_map_t &stats):
         ABDNode(nullptr,
-                std::vector<ABDNode*>{},
                 id,
                 -1,
                 false,
+                true,
                 level,
                 std::numeric_limits<double>::lowest(),
                 std::numeric_limits<double>::lowest(),
@@ -53,7 +51,8 @@ struct ABDNode{
                 top_pop,
                 stats,
                 std::map<id_t, double>{},
-                std::map<id_t, double>{}){}
+                std::map<id_t, double>{},
+                std::vector<id_t>{}){}
 
     ABDNode() : ABDNode(-1, -1, -1, -1, 0, stat_map_t{}){}
 
@@ -81,12 +80,7 @@ struct ABDNode{
             return cand;
 
         }else{
-            std::vector<id_t> cand;
-            cand.reserve(this->_stats.size());
-            auto it_end = this->_stats.cend();
-            for(auto it = this->_stats.cbegin(); it != it_end; ++it)
-                cand.emplace_back(it->first);
-            return cand;
+            return _candidates;
         }
 
     }
@@ -106,11 +100,46 @@ struct ABDNode{
             return std::numeric_limits<double>::lowest();
     }
 
+    bool is_leaf() const{
+        return _is_leaf;
+    }
+
+    bool has_loved() const{
+        return !_children.empty();
+    }
+
+    bool has_hated() const{
+        return !_children.size() < 2;
+    }
+
+    bool has_unknown() const{
+        return !_children.size() < 3;
+    }
+
+    ABDNode* traverse_loved() const{
+        if(!has_loved())
+            throw std::runtime_error("No LOVED branch from this node.");
+        return _children[0].get();
+    }
+
+    ABDNode* traverse_hated() const{
+        if(!has_hated())
+            throw std::runtime_error("No HATED branch from this node.");
+        return _children[1].get();
+    }
+
+    ABDNode* traverse_unknown() const{
+        if(!has_unknown())
+            throw std::runtime_error("No UNKNOWN branch from this node.");
+        return _children[2].get();
+    }
+
     const ABDNode *_parent;
     std::vector<std::unique_ptr<ABDNode>> _children;
     id_t _id;
     id_t _splitter_id;
     bool _is_unknown;
+    bool _is_leaf;
     unsigned _level;
     double _quality;
     double _split_quality;
@@ -120,6 +149,7 @@ struct ABDNode{
     stat_map_t _stats;
     std::map<id_t, double> _predictions;
     std::map<id_t, double> _scores;
+    std::vector<id_t> _candidates;
     group_t _users;
 
 
@@ -166,6 +196,7 @@ protected:
     using bound_t = typename index_t::bound_t;
     using bound_map_t = std::unordered_map<typename ABDNode::id_t, bound_t>;
     using stat_map_t = typename DTree<ABDNode>::stat_map_t;
+public:
     using typename DTree<ABDNode>::node_ptr_t;
     using typename DTree<ABDNode>::node_cptr_t;
     using typename DTree<ABDNode>::id_t;
@@ -188,6 +219,7 @@ public:
     using DTree<ABDNode>::gdt_r;
 
     void build() override;
+    void build(const std::vector<id_t> &candidates);
     void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data) override;
     void init(const std::vector<Rating> &training_data) override;
     node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const override;
@@ -303,6 +335,21 @@ double ABDTree::squared_error(const stat_map_t &stats) const{
 }
 
 void ABDTree::build(){
+    build(_item_index.keys());
+}
+
+void ABDTree::build(const std::vector<id_t> &candidates){
+    // compute the intersection between candidates and item_index keys
+    std::vector<id_t> candidates_sorted(candidates);
+    std::sort(candidates_sorted.begin(), candidates_sorted.end());
+    std::vector<id_t> item_index_keys = _item_index.keys();
+    std::vector<id_t> intersection(std::min(item_index_keys.size(), candidates_sorted.size()));
+    auto it = std::set_intersection(candidates_sorted.cbegin(), candidates_sorted.cend(),
+                                    item_index_keys.cbegin(), item_index_keys.cend(),
+                                    intersection.begin());
+    intersection.resize(it - intersection.begin());
+    // assign candidates to the root node
+    this->_root->_candidates = intersection;
     // compute root node's bounds
     for(const auto &entry : _item_index)
         _node_bounds[this->_root->_id].emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
@@ -325,6 +372,7 @@ void ABDTree::split(node_ptr_t node,
                     std::vector<stat_map_t> &g_stats){
     node->_splitter_id = splitter_id;
     node->_split_quality = splitter_quality;
+    node->_is_leaf = false;
     auto &children = node->_children;
     // fork children, one for each entry in group_stats
     std::size_t u_num_users = node->_num_users;
@@ -332,7 +380,9 @@ void ABDTree::split(node_ptr_t node,
         node_ptr_t child = new ABDNode;
         child->_parent = node;
         child->_id = _node_counter++;
+        child->_candidates = node->_candidates;
         child->_level = node->_level + 1;
+        child->_is_leaf = true;
         child->_num_ratings = 0u;
         child->_quality = g_qualities[child_idx];
         child->_stats.swap(g_stats[child_idx]);
