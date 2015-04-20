@@ -4,3 +4,5 @@ build/
 release/
 debug/
 data/
+dist/
+*.egg-info

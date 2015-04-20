@@ -1,7 +1,0 @@
-setup.py
-dtree/__init__.py
-dtree.egg-info/PKG-INFO
-dtree.egg-info/SOURCES.txt
-dtree.egg-info/dependency_links.txt
-dtree.egg-info/top_level.txt
-src/dtreemodule.cpp
