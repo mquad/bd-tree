@@ -12,7 +12,7 @@ os.environ["CC"] = "g++"
 os.environ["CXX"] = "g++"
 
 setup(name='dtree',
-      version='1.0.1',
+      version='1.1.0',
       description='Adaptive Bootstrap Decistion Trees for Active Learning',
       packages=['dtree'],
       ext_modules=[Extension('dtree.dtreelib',
