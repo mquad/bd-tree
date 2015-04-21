@@ -62,8 +62,9 @@ struct ABDNode{
         if(_top_pop > 0){ // Most Popular Sampling
             // sort items by popularity
             std::vector<std::pair<id_t, int>> items_by_pop;
-            items_by_pop.reserve(_stats.size());
-            for(const auto &entry : _stats) items_by_pop.emplace_back(entry.first, entry.second._n);
+            items_by_pop.reserve(_candidates.size());
+            for(const auto &cand : _candidates)
+                items_by_pop.emplace_back(cand, _stats.at(cand)._n);
             std::sort(items_by_pop.begin(),
                       items_by_pop.end(),
                       [](const std::pair<id_t, int> &lhs, const std::pair<id_t, int> &rhs){
@@ -280,7 +281,7 @@ protected:
 
 void ABDTree::init(const std::vector<Rating> &training_data, __attribute__((unused)) const std::vector<Rating> &validation_data){
     //NOTE: This method simply calls the standard initialization
-    //Cross-validation was not considered in the original Golbandi et al. work.
+    //Validation was not considered in the original work of Golbandi et al..
     init(training_data);
 }
 
