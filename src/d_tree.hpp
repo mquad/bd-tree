@@ -134,6 +134,8 @@ void DTree<N>::find_splitter(const node_cptr_t node,
                              std::vector<double> &g_qualities,
                              std::vector<stat_map_t> &g_stats){
     const auto &candidates = node->candidates();
+    if(candidates.empty()) return;
+
     if(!_randomize){    // pick the best quality candidate
         std::vector<std::vector<group_t>> cand_groups{_num_threads};
         std::vector<std::vector<double>> cand_g_qualities{_num_threads};

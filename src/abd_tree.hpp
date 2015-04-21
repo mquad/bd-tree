@@ -64,7 +64,8 @@ struct ABDNode{
             std::vector<std::pair<id_t, int>> items_by_pop;
             items_by_pop.reserve(_candidates.size());
             for(const auto &cand : _candidates)
-                items_by_pop.emplace_back(cand, _stats.at(cand)._n);
+                if (_stats.count(cand) > 0)
+                    items_by_pop.emplace_back(cand, _stats.at(cand)._n);
             std::sort(items_by_pop.begin(),
                       items_by_pop.end(),
                       [](const std::pair<id_t, int> &lhs, const std::pair<id_t, int> &rhs){
