@@ -8,7 +8,7 @@ nusers = 3000
 nitems = 4000
 density = .0001
 
-tree = ErrorTree(ratings_min=1, num_threads=4, depth_max=4, randomize=True)
+tree = ErrorTree(ratings_min=1, num_threads=4, depth_max=4, randomize=True, cache_enabled=True)
 tdata = [(int(random()*nusers), int(random()*nitems), int(random()*4+1)) for i in xrange(0, int(nusers*nitems*density))]
 tree.init(tdata)
 tree.build([i for i in xrange(0,500)])

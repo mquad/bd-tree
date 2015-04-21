@@ -161,6 +161,8 @@ struct ABDNode{
 };
 
 void ABDNode::cache_scores(const double h_smooth){
+    _predictions = std::unique_ptr<std::map<id_t, double> >(new std::map<id_t, double>{});
+    _scores = std::unique_ptr<std::map<id_t, double> >(new std::map<id_t, double>{});
     if(_parent != nullptr){
         // user average prediction
         for(const auto &p_pred : (*_parent->_predictions)){
