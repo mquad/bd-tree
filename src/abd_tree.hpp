@@ -23,15 +23,13 @@ struct ABDNode{
             std::size_t num_ratings,
             std::size_t top_pop,
             const stat_map_t &stats,
-            const std::map<id_t, double> &pred_rating,
-            const std::map<id_t, double> &pred_rating_unbiased,
             const std::vector<id_t> &candidates):
         _parent{parent}, _children{},
         _id{id}, _splitter_id{splitter_id}, _is_unknown{is_unknown}, _is_leaf{is_leaf},
         _level{level}, _quality{quality}, _split_quality{split_quality},
         _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
         _stats{std::unique_ptr<stat_map_t>(new stat_map_t{stats})},
-        _predictions{pred_rating}, _scores{pred_rating_unbiased}, _candidates{candidates}, _users{}{ }
+        _candidates{candidates}, _users{}{ }
 
     ABDNode(id_t id,
             unsigned level,
@@ -51,8 +49,6 @@ struct ABDNode{
                 num_ratings,
                 top_pop,
                 stats,
-                std::map<id_t, double>{},
-                std::map<id_t, double>{},
                 std::vector<id_t>{}){}
 
     ABDNode() : ABDNode(-1, -1, -1, -1, 0, stat_map_t{}){}
@@ -89,16 +85,22 @@ struct ABDNode{
     }
 
     bool has_prediction(const id_t &item_id) const{
-        return _predictions.count(item_id) > 0;
+        if(_predictions == nullptr)
+            throw std::runtime_error("Predictions have not been cached. Rebuild the tree with cache_enabled=true.");
+        return _predictions->count(item_id) > 0;
     }
 
     double prediction(const id_t &item_id) const{
-        return _predictions.at(item_id);
+        if(_predictions == nullptr)
+            throw std::runtime_error("Predictions have not been cached. Rebuild the tree with cache_enabled=true.");
+        return _predictions->at(item_id);
     }
 
     double score(const id_t &item_id) const{
-        if(_scores.count(item_id) > 0)
-            return _scores.at(item_id);
+        if(_scores == nullptr)
+            throw std::runtime_error("Scores have not been cached. Rebuild the tree with cache_enabled=true.");
+        if(_scores->count(item_id) > 0)
+            return _scores->at(item_id);
         else
             return std::numeric_limits<double>::lowest();
     }
@@ -150,8 +152,8 @@ struct ABDNode{
     std::size_t _num_ratings;
     std::size_t _top_pop;
     std::unique_ptr<stat_map_t> _stats;
-    std::map<id_t, double> _predictions;
-    std::map<id_t, double> _scores;
+    std::unique_ptr<std::map<id_t, double>> _predictions;
+    std::unique_ptr<std::map<id_t, double>> _scores;
     std::vector<id_t> _candidates;
     group_t _users;
 
@@ -161,29 +163,29 @@ struct ABDNode{
 void ABDNode::cache_scores(const double h_smooth){
     if(_parent != nullptr){
         // user average prediction
-        for(const auto &p_pred : _parent->_predictions){
+        for(const auto &p_pred : (*_parent->_predictions)){
             if(_stats->count(p_pred.first) > 0){
-                _predictions.emplace(p_pred.first, _stats->at(p_pred.first).pred(p_pred.second, h_smooth));
+                _predictions->emplace(p_pred.first, _stats->at(p_pred.first).pred(p_pred.second, h_smooth));
             }else{
-                _predictions.emplace(p_pred.first, p_pred.second);
+                _predictions->emplace(p_pred.first, p_pred.second);
             }
         }
         // user unbiased average prediction
         // i.e., average deviation from the user average prediction
-        for(const auto &p_score : _parent->_scores){
+        for(const auto &p_score : (*_parent->_scores)){
             if(_stats->count(p_score.first) > 0){
-                _scores.emplace(p_score.first, _stats->at(p_score.first).score(p_score.second, h_smooth));
+                _scores->emplace(p_score.first, _stats->at(p_score.first).score(p_score.second, h_smooth));
             }else{
-                _scores.emplace(p_score.first, p_score.second);
+                _scores->emplace(p_score.first, p_score.second);
             }
         }
     }else{
         //root node
         for(const auto &s : (*this->_stats)){
-            _predictions.emplace(s.first, s.second.pred());
+            _predictions->emplace(s.first, s.second.pred());
         }
         for(const auto &s : (*this->_stats)){
-            _scores.emplace(s.first, s.second.score());
+            _scores->emplace(s.first, s.second.score());
         }
     }
 }
@@ -212,10 +214,11 @@ public:
             const unsigned num_threads = 1,
             const bool randomize = false,
             const double rand_coeff = 10,
+            const bool cache_enabled = true,
             const BasicLogger &log = BasicLogger{std::cout}):
         DTree<ABDNode>(depth_max, ratings_min, num_threads, randomize, rand_coeff, log),
         _item_index{}, _user_index{}, _node_bounds{},
-        _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _node_counter{0u}{}
+        _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _cache_enabled{cache_enabled}, _node_counter{0u}{}
 
     ~ABDTree(){}
 
@@ -278,6 +281,7 @@ protected:
     double _bu_reg;
     double _h_smooth;
     std::size_t _top_pop;
+    bool _cache_enabled;
     unsigned _node_counter;
 };
 
@@ -357,7 +361,7 @@ void ABDTree::build(const std::vector<id_t> &candidates){
     for(const auto &entry : _item_index)
         _node_bounds[this->_root->_id].emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
     // cache root's scores
-    this->_root->cache_scores(_h_smooth);
+    if(_cache_enabled)  this->_root->cache_scores(_h_smooth);
     // generate the decision tree
     this->_log.node(this->_root->_id, this->_root->_level)
             << "Num.users: " << this->_root->_num_users
@@ -394,7 +398,7 @@ void ABDTree::split(node_ptr_t node,
         child->_quality = g_qualities[child_idx];
         child->_stats = std::unique_ptr<stat_map_t>(new stat_map_t{g_stats[child_idx]});
         child->_top_pop = node->_top_pop;
-        child->cache_scores(_h_smooth);
+        if(_cache_enabled)  child->cache_scores(_h_smooth);
         if(child_idx < groups.size()){
             child->_num_users = groups[child_idx].size();
             u_num_users -= child->_num_users;

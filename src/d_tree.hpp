@@ -188,7 +188,8 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         groups.swap(cand_groups[best_thread]);
         g_qualities.swap(cand_g_qualities[best_thread]);
         g_stats.swap(cand_g_stats[best_thread]);
-    }else{  // pick a candidate with probability proportianal to his enhancement in quality
+    }else{
+        // pick a candidate with probability proportianal to his enhancement in quality
         //to reduce the memory footprint, we store just the candidate qualities, then recompute the groups just for the chosen one
         std::vector<std::pair<id_t, double>> cand_qualities{candidates.size(), std::make_pair(id_t{},
                                                                                               std::numeric_limits<double>::lowest())};

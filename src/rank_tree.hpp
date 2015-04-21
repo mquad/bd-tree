@@ -172,7 +172,7 @@ double RankTree<R>::split_quality(const node_cptr_t node,
         if(node->_level > 1){
             g_qualities.emplace_back(
                         _ranking_index.evaluate(
-                            build_ranking(g_stats[gidx], node->_scores, this->_h_smooth),
+                            build_ranking(g_stats[gidx], *node->_scores, this->_h_smooth),
                             groups[gidx]));
         }else{
             g_qualities.emplace_back(
