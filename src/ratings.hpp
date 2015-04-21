@@ -27,7 +27,7 @@ struct Rating{
         return os;
     }
 
-    static std::vector<Rating> read_from(const std::string &training_filename, const std::size_t sz_hint){
+    static std::vector<Rating> read_from(const std::string &training_filename, const std::size_t sz_hint = 10000){
         boost::iostreams::mapped_file mmap(training_filename, boost::iostreams::mapped_file::readonly);
         auto f = mmap.const_data();
         auto l = f + mmap.size();

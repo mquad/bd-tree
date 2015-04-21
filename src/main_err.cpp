@@ -8,9 +8,9 @@ int main(int argc, char **argv)
 {
     if(argc < 2 || std::string(argv[1]) == "help"){
         std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl
-                  << "Usage: ./abdtree_error build <training-file> <validation-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <size-hint>" << std::endl;
+                  << "Usage: ./bdtree_error build <training-file> <validation-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff>" << std::endl;
         std::cout << "PREDICTION / EVALUATION" << std::endl
-                  << "Usage: ./abdtree_error eval <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <size-hint> <outfile>" << std::endl;
+                  << "Usage: ./bdtree_error eval <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <outfile>" << std::endl;
         return 1;
     }
     std::string mode(argv[1]);
@@ -25,14 +25,13 @@ int main(int argc, char **argv)
         unsigned num_threads = std::strtoul(argv[9], nullptr, 10);
         bool randomize = std::strtol(argv[10], nullptr, 10);
         double rand_coeff = std::strtod(argv[11], nullptr);
-        std::size_t sz_hint = std::strtoull(argv[12], nullptr, 10);
 
         stopwatch sw;
         sw.reset();
         sw.start();
         // build the decision tree
         ABDTree bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff, false};
-        bdtree.init(Rating::read_from(training_file, sz_hint));
+        bdtree.init(Rating::read_from(training_file));
         auto init_t = sw.elapsed_ms();
         std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
         bdtree.build();
