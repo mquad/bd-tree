@@ -421,18 +421,6 @@ void ABDTree::split(node_ptr_t parent,
             children[gidx]->_num_ratings += g_bounds[gidx].size();
         }
     }
-    for(const auto &child : children){
-        this->_log.node(child->_id, child->_level)
-                << "Num.users: " << child->_num_users
-                << "\tNum.ratings: " << child->_num_ratings
-                << "\tQuality: " << child->_quality << std::endl;
-        //recursive call
-        gdt_r(child.get());
-        // release stats
-        child->_stats.reset(nullptr);
-    }
-
-
 }
 
 double ABDTree::split_quality(const node_cptr_t node,

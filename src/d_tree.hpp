@@ -121,6 +121,15 @@ void DTree<N>::gdt_r(node_ptr_t node){
         return;
     }
     split(node, splitter, quality, groups, g_qualities, g_stats);
+    for(const auto &child : node->_children){
+        this->_log.node(child->_id, child->_level)
+                << "Num.users: " << child->_num_users
+                << "\tNum.ratings: " << child->_num_ratings
+                << "\tQuality: " << child->_quality << std::endl;
+        //recursive call
+        gdt_r(child.get());
+    }
+
 }
 
 template<typename N>
