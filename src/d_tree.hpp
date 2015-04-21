@@ -47,7 +47,7 @@ public:
     virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
 
     node_ptr_t root()           {return _root.get();}
-    node_ptr_t root() const    {return _root.get();}
+    node_ptr_t root() const     {return _root.get();}
     unsigned depth_max() const  {return _depth_max;}
 
 protected:
@@ -121,14 +121,6 @@ void DTree<N>::gdt_r(node_ptr_t node){
         return;
     }
     split(node, splitter, quality, groups, g_qualities, g_stats);
-    //recursive call
-    for(auto &child : node->_children){
-        this->_log.node(child->_id, child->_level)
-                << "Num.users: " << child->_num_users
-                << "\tNum.ratings: " << child->_num_ratings
-                << "\tQuality: " << child->_quality << std::endl;
-        gdt_r(child.get());
-    }
 }
 
 template<typename N>

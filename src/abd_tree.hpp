@@ -262,7 +262,7 @@ protected:
                                        It right,
                                        std::size_t start,
                                        const std::vector<group_t> &groups);
-    void split(node_ptr_t node,
+    void split(node_ptr_t parent,
                const id_t splitter_id,
                const double splitter_quality,
                std::vector<group_t> &groups,
@@ -371,47 +371,48 @@ void ABDTree::build(const std::vector<id_t> &candidates){
             << "\tQuality: " << this->_root->_quality << std::endl;
 
     gdt_r(this->_root.get());
+
 }
 
-void ABDTree::split(node_ptr_t node,
+void ABDTree::split(node_ptr_t parent,
                     const id_t splitter_id,
                     const double splitter_quality,
                     std::vector<group_t> &groups,
                     std::vector<double> &g_qualities,
                     std::vector<stat_map_t> &g_stats){
     // update parent node
-    node->_splitter_id = splitter_id;
-    node->_split_quality = splitter_quality;
-    node->_is_leaf = false;
-    // release memory associated to parent's stats
-    node->_stats.reset(nullptr);
+    parent->_splitter_id = splitter_id;
+    parent->_split_quality = splitter_quality;
+    parent->_is_leaf = false;
 
     // fork children, one for each entry in group_stats
-    auto &children = node->_children;
-    std::size_t u_num_users = node->_num_users;
+    auto &children = parent->_children;
+    std::size_t u_num_users = parent->_num_users;
     for(std::size_t child_idx{}; child_idx < g_stats.size(); ++child_idx){
         node_ptr_t child = new ABDNode;
-        child->_parent = node;
+        child->_parent = parent;
         child->_id = _node_counter++;
-        child->_candidates = node->_candidates;
-        child->_level = node->_level + 1;
+        child->_candidates = parent->_candidates;
+        child->_level = parent->_level + 1;
         child->_is_leaf = true;
         child->_num_ratings = 0u;
         child->_quality = g_qualities[child_idx];
+        child->_top_pop = parent->_top_pop;
+        // store child stats temporarely
         child->_stats = std::unique_ptr<stat_map_t>(new stat_map_t{g_stats[child_idx]});
-        child->_top_pop = node->_top_pop;
         if(_cache_enabled)  child->cache_scores(_h_smooth);
         if(child_idx < groups.size()){
             child->_num_users = groups[child_idx].size();
             u_num_users -= child->_num_users;
+        }else{
+            child->_num_users = u_num_users;
+            child->_is_unknown = true;
         }
         children.push_back(std::unique_ptr<ABDNode>(child));
     }
-    children.back()->_num_users = u_num_users;
-    children.back()->_is_unknown = true;
     // compute children boundaries
     for(auto &entry : _item_index){
-        const auto &item_bounds = _node_bounds.at(node->_id).at(entry.first);
+        const auto &item_bounds = _node_bounds.at(parent->_id).at(entry.first);
         auto it_left = entry.second.begin() + item_bounds._left;
         auto it_right = entry.second.begin() + item_bounds._right;
         const auto g_bounds = sort_by_group(it_left, it_right, item_bounds._left, groups);
@@ -420,6 +421,18 @@ void ABDTree::split(node_ptr_t node,
             children[gidx]->_num_ratings += g_bounds[gidx].size();
         }
     }
+    for(const auto &child : children){
+        this->_log.node(child->_id, child->_level)
+                << "Num.users: " << child->_num_users
+                << "\tNum.ratings: " << child->_num_ratings
+                << "\tQuality: " << child->_quality << std::endl;
+        //recursive call
+        gdt_r(child.get());
+        // release stats
+        child->_stats.reset(nullptr);
+    }
+
+
 }
 
 double ABDTree::split_quality(const node_cptr_t node,
