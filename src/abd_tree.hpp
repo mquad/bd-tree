@@ -30,7 +30,8 @@ struct ABDNode{
         _id{id}, _splitter_id{splitter_id}, _is_unknown{is_unknown}, _is_leaf{is_leaf},
         _level{level}, _quality{quality}, _split_quality{split_quality},
         _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
-        _stats{stats}, _predictions{pred_rating}, _scores{pred_rating_unbiased}, _candidates{candidates}, _users{}{ }
+        _stats{std::unique_ptr<stat_map_t>(new stat_map_t{stats})},
+        _predictions{pred_rating}, _scores{pred_rating_unbiased}, _candidates{candidates}, _users{}{ }
 
     ABDNode(id_t id,
             unsigned level,
@@ -64,8 +65,8 @@ struct ABDNode{
             std::vector<std::pair<id_t, int>> items_by_pop;
             items_by_pop.reserve(_candidates.size());
             for(const auto &cand : _candidates)
-                if (_stats.count(cand) > 0)
-                    items_by_pop.emplace_back(cand, _stats.at(cand)._n);
+                if (_stats->count(cand) > 0)
+                    items_by_pop.emplace_back(cand, _stats->at(cand)._n);
             std::sort(items_by_pop.begin(),
                       items_by_pop.end(),
                       [](const std::pair<id_t, int> &lhs, const std::pair<id_t, int> &rhs){
@@ -148,7 +149,7 @@ struct ABDNode{
     std::size_t _num_users;
     std::size_t _num_ratings;
     std::size_t _top_pop;
-    stat_map_t _stats;
+    std::unique_ptr<stat_map_t> _stats;
     std::map<id_t, double> _predictions;
     std::map<id_t, double> _scores;
     std::vector<id_t> _candidates;
@@ -161,8 +162,8 @@ void ABDNode::cache_scores(const double h_smooth){
     if(_parent != nullptr){
         // user average prediction
         for(const auto &p_pred : _parent->_predictions){
-            if(_stats.count(p_pred.first) > 0){
-                _predictions.emplace(p_pred.first, _stats.at(p_pred.first).pred(p_pred.second, h_smooth));
+            if(_stats->count(p_pred.first) > 0){
+                _predictions.emplace(p_pred.first, _stats->at(p_pred.first).pred(p_pred.second, h_smooth));
             }else{
                 _predictions.emplace(p_pred.first, p_pred.second);
             }
@@ -170,18 +171,18 @@ void ABDNode::cache_scores(const double h_smooth){
         // user unbiased average prediction
         // i.e., average deviation from the user average prediction
         for(const auto &p_score : _parent->_scores){
-            if(_stats.count(p_score.first) > 0){
-                _scores.emplace(p_score.first, _stats.at(p_score.first).score(p_score.second, h_smooth));
+            if(_stats->count(p_score.first) > 0){
+                _scores.emplace(p_score.first, _stats->at(p_score.first).score(p_score.second, h_smooth));
             }else{
                 _scores.emplace(p_score.first, p_score.second);
             }
         }
     }else{
         //root node
-        for(const auto &s : this->_stats){
+        for(const auto &s : (*this->_stats)){
             _predictions.emplace(s.first, s.second.pred());
         }
-        for(const auto &s : this->_stats){
+        for(const auto &s : (*this->_stats)){
             _scores.emplace(s.first, s.second.score());
         }
     }
@@ -325,7 +326,7 @@ void ABDTree::compute_biases(const double global_mean){
 }
 
 void ABDTree::compute_root_quality(node_ptr_t node){
-    node->_quality = -squared_error(node->_stats);
+    node->_quality = -squared_error(*node->_stats);
 }
 
 double ABDTree::squared_error(const stat_map_t &stats) const{
@@ -372,11 +373,15 @@ void ABDTree::split(node_ptr_t node,
                     std::vector<group_t> &groups,
                     std::vector<double> &g_qualities,
                     std::vector<stat_map_t> &g_stats){
+    // update parent node
     node->_splitter_id = splitter_id;
     node->_split_quality = splitter_quality;
     node->_is_leaf = false;
-    auto &children = node->_children;
+    // release memory associated to parent's stats
+    node->_stats.reset(nullptr);
+
     // fork children, one for each entry in group_stats
+    auto &children = node->_children;
     std::size_t u_num_users = node->_num_users;
     for(std::size_t child_idx{}; child_idx < g_stats.size(); ++child_idx){
         node_ptr_t child = new ABDNode;
@@ -387,7 +392,7 @@ void ABDTree::split(node_ptr_t node,
         child->_is_leaf = true;
         child->_num_ratings = 0u;
         child->_quality = g_qualities[child_idx];
-        child->_stats.swap(g_stats[child_idx]);
+        child->_stats = std::unique_ptr<stat_map_t>(new stat_map_t{g_stats[child_idx]});
         child->_top_pop = node->_top_pop;
         child->cache_scores(_h_smooth);
         if(child_idx < groups.size()){
@@ -512,13 +517,13 @@ void ABDTree::unknown_stats(const node_cptr_t node,
                             std::vector<stat_map_t> &group_stats) const{
     group_stats.push_back(ABDNode::stat_map_t());
     // initialize the pointers to the current element for each stats
-    std::vector<decltype(node->_stats.cbegin())> it_stats;
+    std::vector<decltype(node->_stats->cbegin())> it_stats;
     it_stats.reserve(group_stats.size());
     for(const auto &s : group_stats)
         it_stats.push_back(s.cbegin());
     // pass over all the stats simultaneously and
     // compute the stats for the unknown branch of the tree
-    for(const auto &parent_stats : node->_stats){
+    for(const auto &parent_stats : (*node->_stats)){
         // retrieve current node's stats
         const auto &item = parent_stats.first;
         auto unknown_stats = parent_stats.second;

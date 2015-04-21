@@ -111,7 +111,7 @@ protected:
 
 template<typename R>
 void RankTree<R>::compute_root_quality(node_ptr_t node){
-    node->_quality = _ranking_index.evaluate_all(build_ranking(node->_stats));
+    node->_quality = _ranking_index.evaluate_all(build_ranking(*node->_stats));
 }
 
 template<typename R>
