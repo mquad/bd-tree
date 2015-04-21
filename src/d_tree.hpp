@@ -97,6 +97,11 @@ void DTree<N>::gdt_r(node_ptr_t node){
         _log.node(node->_id, node->_level) << "This node has < " << _ratings_min << " ratings. STOP." << std::endl;
         return;
     }
+    if(node->_num_users < 2) {
+        _log.node(node->_id, node->_level) << "This node has < 2 users. No split can be found. STOP." << std::endl;
+        return;
+    }
+
     id_t splitter{};
     double quality{};
     std::vector<group_t> groups{};
