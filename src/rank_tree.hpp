@@ -1,6 +1,7 @@
 #ifndef RANKTREE_HPP
 #define RANKTREE_HPP
 #include <algorithm>
+#include <cstdio>
 #include <unordered_set>
 #include "abd_tree.hpp"
 #include "aux.hpp"
@@ -27,24 +28,33 @@ public:
         _index[key].emplace(item, rating);
     }
 
-    double evaluate_all(const std::vector<Key> &ranking){
-        double q{.0};
-        for(const auto &entry : _index)
-            q += Metric::eval(ranking, entry.second);
-        return q;
+    // return the -sorted- key vector
+    std::vector<Key> keys(){
+        return extract_keys(_index);
     }
 
-    double evaluate(const std::vector<Key> &ranking, const std::vector<Key> &users) const{
+    double evaluate_all(const std::vector<Key> &ranking){
+        return evaluate_users(ranking, keys());
+    }
+
+    double evaluate_users(const std::vector<Key> &ranking, const std::vector<Key> &users) const{
         double m{.0};
         for(const auto &u : users)
-            if(_index.count(u) > 0)
-                m += Metric::eval(ranking, _index.at(u));
+            m += evaluate_user(ranking, u);
         return m;
     }
 
-    double evaluate(const std::vector<Key> &ranking, const Key &user) const{
-        if(_index.count(user) > 0)
-            return Metric::eval(ranking, _index.at(user));
+    double evaluate_user(const std::vector<Key> &ranking, const Key &user) const{
+        if(_index.count(user) > 0){
+            const auto &user_relevance = _index.at(user);
+            // compute the ranking only on items rated by the user
+            std::vector<Key> user_ranking;
+            user_ranking.reserve(user_relevance.size());
+            for(const auto key : ranking)
+                if(user_relevance.count(key) > 0)
+                    user_ranking.push_back(key);
+            return Metric::eval(user_ranking, user_relevance);
+        }
         return .0;
     }
 };
@@ -161,7 +171,6 @@ double RankTree<R>::split_quality(const node_cptr_t node,
         if(it_score->_rating >= 4){  // loved item
             groups[0].push_back(it_score->_id);
             this->_user_index.update_stats(g_stats[0], it_score->_id);
-
         }else{  // hated item
             groups[1].push_back(it_score->_id);
             this->_user_index.update_stats(g_stats[1], it_score->_id);
@@ -173,12 +182,12 @@ double RankTree<R>::split_quality(const node_cptr_t node,
     for(std::size_t gidx{0u}; gidx < groups.size(); ++gidx){
         if(node->_level > 1){
             g_qualities.emplace_back(
-                        _ranking_index.evaluate(
+                        _ranking_index.evaluate_users(
                             build_ranking(g_stats[gidx], *node->_scores, this->_h_smooth),
                             groups[gidx]));
         }else{
             g_qualities.emplace_back(
-                        _ranking_index.evaluate(
+                        _ranking_index.evaluate_users(
                             build_ranking(g_stats[gidx]),
                             groups[gidx]));
         }
@@ -192,7 +201,9 @@ void RankTree<R>::unknown_users(const node_cptr_t node,
                                       std::vector<group_t> &groups) const{
     groups.push_back(node->_users); //init with parent's users
     auto &unknown_users = groups.back();
+    assert(is_ordered(unknown_users.begin(), unknown_users.end()));
     for(std::size_t gidx{0}; gidx < groups.size()-1; ++gidx){
+        assert(is_ordered(groups[gidx].begin(), groups[gidx].end()));
         group_t diff_result(unknown_users.size());
         auto it = std::set_difference(unknown_users.begin(), unknown_users.end(),
                                       groups[gidx].begin(), groups[gidx].end(),
@@ -200,5 +211,6 @@ void RankTree<R>::unknown_users(const node_cptr_t node,
         diff_result.resize(std::distance(diff_result.begin(), it));
         unknown_users.swap(diff_result);
     }
+    assert(unknown_users.size() == node->_num_users - groups[0].size() - groups[1].size());
 }
 #endif // RANKTREE_HPP
