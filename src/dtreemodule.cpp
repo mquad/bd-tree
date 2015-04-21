@@ -143,7 +143,7 @@ void expose_Traverser(const std::string &classname){
 BOOST_PYTHON_MODULE(dtreelib)
 {
   expose_tree_methods(py::class_<ErrorTreePy, boost::noncopyable>("ErrorTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
-  expose_tree_methods(py::class_<RankTreePy<NDCGIndex>, boost::noncopyable>("RankNDCGTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double. bool>()));
+  expose_tree_methods(py::class_<RankTreePy<NDCGIndex>, boost::noncopyable>("RankNDCGTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
   expose_Traverser<ErrorTreePy>("ErrorTreeTraverserPy");
   expose_Traverser<RankTreePy<NDCGIndex>>("RankTreeNDCGPy");
 }
