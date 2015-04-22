@@ -72,7 +72,7 @@ public:
     // inherith the constructor
     using ABDTree::ABDTree;
     ~RankTree(){
-        std::cout << "~RankTree()" << std::endl;
+//        std::cout << "~RankTree()" << std::endl;
     }
 
     void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data){
