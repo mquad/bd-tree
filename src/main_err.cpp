@@ -4,17 +4,28 @@
 
 constexpr unsigned N = 10;
 
+void print_usage_build(){
+    std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl
+              << "Usage: ./bdtree_error build <training-file> <validation-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff>" << std::endl;
+}
+
+void print_usage_eval(){
+    std::cout << "PREDICTION / EVALUATION" << std::endl
+              << "Usage: ./bdtree_error eval <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <outfile>" << std::endl;
+}
+
 int main(int argc, char **argv)
 {
     if(argc < 2 || std::string(argv[1]) == "help"){
-        std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl
-                  << "Usage: ./bdtree_error build <training-file> <validation-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff>" << std::endl;
-        std::cout << "PREDICTION / EVALUATION" << std::endl
-                  << "Usage: ./bdtree_error eval <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <outfile>" << std::endl;
+        print_usage_build(); print_usage_eval();
         return 1;
     }
     std::string mode(argv[1]);
     if (mode == "build"){
+        if(argc < 12){
+            print_usage_build();
+            return 1;
+        }
         std::string training_file(argv[2]);
         std::string validation_file(argv[3]);
         double lambda = std::strtod(argv[4], nullptr);
@@ -39,6 +50,10 @@ int main(int argc, char **argv)
         return 0;
 
     }else if(mode == "eval"){
+        if(argc < 14){
+            print_usage_eval();
+            return 1;
+        }
         std::string training_file(argv[2]);
         std::string validation_file(argv[3]);
         std::string query_file(argv[4]);
@@ -51,8 +66,7 @@ int main(int argc, char **argv)
         unsigned num_threads = std::strtoul(argv[11], nullptr, 10);
         bool randomize = std::strtol(argv[12], nullptr, 10);
         double rand_coeff = std::strtod(argv[13], nullptr);
-        std::size_t sz_hint = std::strtoull(argv[14], nullptr, 10);
-        std::string outfile(argv[15]);
+        std::string outfile(argv[14]);
 
         stopwatch sw;
         sw.reset();
@@ -60,7 +74,7 @@ int main(int argc, char **argv)
 
         // build the decision tree
         ABDTree bdtree{lambda, h_smoothing, max_depth, min_ratings, top_pop, num_threads, randomize, rand_coeff, true};
-        bdtree.init(Rating::read_from(training_file, sz_hint));
+        bdtree.init(Rating::read_from(training_file));
         auto init_t = sw.elapsed_ms();
         std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
         bdtree.build();
