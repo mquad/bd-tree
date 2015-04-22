@@ -222,7 +222,9 @@ public:
         _item_index{}, _user_index{}, _node_bounds{},
         _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _cache_enabled{cache_enabled}, _node_counter{0u}{}
 
-    ~ABDTree(){}
+    ~ABDTree(){
+        std::cout << "~ABDTree()" << std::endl;
+    }
 
     using DTree<ABDNode>::gdt_r;
 

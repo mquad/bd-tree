@@ -32,7 +32,9 @@ public:
 
 
 
-    virtual ~DTree(){}
+    virtual ~DTree(){
+        std::cout << "~DTree()" << std::endl;
+    }
     virtual void build() = 0;
     virtual void init(const std::vector<Rating> &training_data) = 0;
     virtual void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data) = 0;
