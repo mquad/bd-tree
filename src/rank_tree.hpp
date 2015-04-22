@@ -87,7 +87,7 @@ public:
     }
 
     void init(const std::vector<Rating> &training_data) override{
-        //TODO: cache forced for the time. add support for optional caching in future.
+        //TODO: caching is forced for the time. Support for optional caching to be added in future.
         _cache_enabled = true;
         for(const auto &rat : training_data){
             _ranking_index.insert(rat._user_id, rat._item_id, rat._value);

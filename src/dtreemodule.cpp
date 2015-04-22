@@ -110,15 +110,15 @@ public:
         return _current_node->is_leaf();
     }
     void traverse_loved(){
-        if(_current_node->has_loved())
+        if(!at_leaf() && _current_node->has_loved())
             _current_node = _current_node->traverse_loved();
     }
     void traverse_hated(){
-        if(_current_node->has_hated())
+        if(!at_leaf() && _current_node->has_hated())
             _current_node = _current_node->traverse_hated();
     }
     void traverse_unknown(){
-        if(_current_node->has_unknown())
+        if(!at_leaf() && _current_node->has_unknown())
             _current_node = _current_node->traverse_unknown();
     }
 };
@@ -145,7 +145,7 @@ BOOST_PYTHON_MODULE(dtreelib)
   expose_tree_methods(py::class_<ErrorTreePy, boost::noncopyable>("ErrorTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
   expose_tree_methods(py::class_<RankTreePy<NDCGIndex>, boost::noncopyable>("RankNDCGTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
   expose_Traverser<ErrorTreePy>("ErrorTreeTraverserPy");
-  expose_Traverser<RankTreePy<NDCGIndex>>("RankTreeNDCGPy");
+  expose_Traverser<RankTreePy<NDCGIndex>>("RankNDCGTreeTraverserPy");
 }
 
 
