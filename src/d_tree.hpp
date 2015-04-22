@@ -48,6 +48,8 @@ public:
 
     virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
 
+    virtual void release_temp() = 0;
+
     node_ptr_t root()           {return _root.get();}
     node_ptr_t root() const     {return _root.get();}
     unsigned depth_max() const  {return _depth_max;}

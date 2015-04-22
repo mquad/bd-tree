@@ -47,6 +47,8 @@ int main(int argc, char **argv)
         std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
         bdtree.build();
         std::cout << "Tree built in " << (sw.elapsed_ms() - init_t) / 1000.0 << " s." << std::endl;
+        bdtree.release_temp();
+        std::cout << "Temporaries released. " << (sw.elapsed_ms() - init_t) / 1000.0 << " s." << std::endl;
         return 0;
 
     }else if(mode == "eval"){

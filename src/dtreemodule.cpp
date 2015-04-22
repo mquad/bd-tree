@@ -39,7 +39,7 @@ public:
         this->init(training_data);
     }
 
-    void build_py(const py::list &candidates){
+    void build_py(const py::list &candidates, const bool release_temp){
         std::vector<std::size_t> candidates_vec;
         long int size{py::len(candidates)};
         candidates_vec.reserve(size);
@@ -47,6 +47,8 @@ public:
             candidates_vec.push_back(py::extract<std::size_t>(candidates[t]));
         }
         this->build(candidates_vec);
+        if(release_temp)
+            this->release_temp();
     }
 };
 
@@ -78,7 +80,7 @@ public:
         this->init(training_data);
     }
 
-    void build_py(const py::list &candidates){
+    void build_py(const py::list &candidates, const bool release_temp){
         std::vector<std::size_t> candidates_vec;
         long int size{py::len(candidates)};
         candidates_vec.reserve(size);
@@ -86,6 +88,8 @@ public:
             candidates_vec.push_back(py::extract<std::size_t>(candidates[t]));
         }
         this->build(candidates_vec);
+        if(release_temp)
+            this->release_temp();
     }
 
 };

@@ -82,9 +82,9 @@ public:
         }
         ABDTree::init(training_data);
         // initialize root _users member
-        this->_root->_users.reserve(_user_index.size());
+        this->_root->_users->reserve(_user_index.size());
         for(const auto &entry : _user_index)
-            this->_root->_users.push_back(entry.first);
+            this->_root->_users->push_back(entry.first);
 
     }
 
@@ -96,9 +96,10 @@ public:
         }
         ABDTree::init(training_data);
         // initialize root _users member
-        this->_root->_users.reserve(_user_index.size());
+        this->_root->_users = std::unique_ptr<group_t>(new group_t{});
+        this->_root->_users->reserve(_user_index.size());
         for(const auto &entry : _user_index)
-            this->_root->_users.push_back(entry.first);
+            this->_root->_users->push_back(entry.first);
     }
 protected:
     void compute_root_quality(node_ptr_t node) override;
@@ -144,11 +145,11 @@ void RankTree<R>::split(node_ptr_t node,
     ABDTree::split(node, splitter_id, splitter_quality, base_groups, g_qualities, g_stats);
     // explicitly save the ids of the users of each children node
     for(std::size_t gidx{0u}; gidx < groups.size(); ++gidx)
-        node->_children[gidx]->_users.swap(groups[gidx]);
+        node->_children[gidx]->_users = std::unique_ptr<group_t>(new group_t(groups[gidx]));
 
-    assert(node->_children[0]->_users.size() == node->_children[0]->_num_users);
-    assert(node->_children[1]->_users.size() == node->_children[1]->_num_users);
-    assert(node->_children[2]->_users.size() == node->_children[2]->_num_users);
+    assert(node->_children[0]->_users->size() == node->_children[0]->_num_users);
+    assert(node->_children[1]->_users->size() == node->_children[1]->_num_users);
+    assert(node->_children[2]->_users->size() == node->_children[2]->_num_users);
 }
 
 template<typename R>
@@ -201,7 +202,7 @@ double RankTree<R>::split_quality(const node_cptr_t node,
 template<typename R>
 void RankTree<R>::unknown_users(const node_cptr_t node,
                                       std::vector<group_t> &groups) const{
-    groups.push_back(node->_users); //init with parent's users
+    groups.push_back(*node->_users); //init with parent's users
     auto &unknown_users = groups.back();
     assert(is_ordered(unknown_users.begin(), unknown_users.end()));
     for(std::size_t gidx{0}; gidx < groups.size()-1; ++gidx){

@@ -29,7 +29,8 @@ struct ABDNode{
         _level{level}, _quality{quality}, _split_quality{split_quality},
         _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
         _stats{std::unique_ptr<stat_map_t>(new stat_map_t{stats})},
-        _candidates{candidates}, _users{}{ }
+        _candidates{std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(candidates))},
+        _users{nullptr}{ }
 
     ABDNode(id_t id,
             unsigned level,
@@ -59,8 +60,8 @@ struct ABDNode{
         if(_top_pop > 0){ // Most Popular Sampling
             // sort items by popularity
             std::vector<std::pair<id_t, int>> items_by_pop;
-            items_by_pop.reserve(_candidates.size());
-            for(const auto &cand : _candidates)
+            items_by_pop.reserve(_candidates->size());
+            for(const auto &cand : *_candidates)
                 if (_stats->count(cand) > 0)
                     items_by_pop.emplace_back(cand, _stats->at(cand)._n);
             std::sort(items_by_pop.begin(),
@@ -79,7 +80,7 @@ struct ABDNode{
             return cand;
 
         }else{
-            return _candidates;
+            return *_candidates;
         }
 
     }
@@ -139,6 +140,16 @@ struct ABDNode{
         return _children[2].get();
     }
 
+    void free_cache(){
+        _stats.reset(nullptr);
+        _predictions.reset(nullptr);
+        _scores.reset(nullptr);
+        _candidates.reset(nullptr);
+        _users.reset(nullptr);
+        for(auto &child : _children)
+            child->free_cache();
+    }
+
     const ABDNode *_parent;
     std::vector<std::unique_ptr<ABDNode>> _children;
     id_t _id;
@@ -154,8 +165,8 @@ struct ABDNode{
     std::unique_ptr<stat_map_t> _stats;
     std::unique_ptr<std::map<id_t, double>> _predictions;
     std::unique_ptr<std::map<id_t, double>> _scores;
-    std::vector<id_t> _candidates;
-    group_t _users;
+    std::unique_ptr<std::vector<id_t>> _candidates;
+    std::unique_ptr<group_t> _users;
 
 
 };
@@ -253,6 +264,10 @@ public:
             return node->score(lhs) > node->score(rhs);
         });
         return rank;
+    }
+
+    void release_temp() override{
+        _root->free_cache();
     }
 
 protected:
@@ -360,7 +375,7 @@ void ABDTree::build(const std::vector<id_t> &candidates){
                                     intersection.begin());
     intersection.resize(it - intersection.begin());
     // assign candidates to the root node
-    this->_root->_candidates = intersection;
+    this->_root->_candidates = std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(intersection));
     // compute root node's bounds
     for(const auto &entry : _item_index)
         _node_bounds[this->_root->_id].emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
@@ -394,7 +409,7 @@ void ABDTree::split(node_ptr_t parent,
         node_ptr_t child = new ABDNode;
         child->_parent = parent;
         child->_id = _node_counter++;
-        child->_candidates = parent->_candidates;
+        child->_candidates = std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(*parent->_candidates));
         child->_level = parent->_level + 1;
         child->_is_leaf = true;
         child->_num_ratings = 0u;
