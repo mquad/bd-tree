@@ -45,9 +45,9 @@ std::vector<double> evaluate_error(const T &dtree,
                 if(metric != -1){
                     metric_avg[level] += metric;
                     ++counts[level];
-                    node = dtree.traverse(node, ans.second);
-                    ++level;
                 }
+                node = dtree.traverse(node, ans.second);
+                ++level;
             }
         }
     }
