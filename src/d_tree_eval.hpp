@@ -41,10 +41,13 @@ std::vector<double> evaluate_error(const T &dtree,
             auto node = dtree.root();
             while(node != nullptr){
                 profile_t predicted = dtree.predict(node, test_ids);
-                metric_avg[level] += Metric::eval(predicted, test.at(ans.first));
-                ++counts[level];
-                node = dtree.traverse(node, ans.second);
-                ++level;
+                double metric = Metric::eval(predicted, test.at(ans.first));
+                if(metric != -1){
+                    metric_avg[level] += metric;
+                    ++counts[level];
+                    node = dtree.traverse(node, ans.second);
+                    ++level;
+                }
             }
         }
     }

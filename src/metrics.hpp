@@ -24,7 +24,10 @@ struct RMSE{
                 ++n;
             }
         }
-        return std::sqrt(sq_err / n);
+        if(n > 0)
+            return std::sqrt(sq_err / n);
+        else
+            return -1;
     }
 };
 
