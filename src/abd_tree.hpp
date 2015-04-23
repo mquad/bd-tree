@@ -230,11 +230,11 @@ public:
             const bool cache_enabled = true,
             const BasicLogger &log = BasicLogger{std::cout}):
         DTree<ABDNode>(depth_max, ratings_min, num_threads, randomize, rand_coeff, log),
-        _item_index{}, _user_index{}, _node_bounds{},
+        _item_index{nullptr}, _user_index{nullptr}, _node_bounds{nullptr},
         _bu_reg{bu_reg}, _h_smooth{h_smooth}, _top_pop{top_pop}, _cache_enabled{cache_enabled}, _node_counter{0u}{}
 
     ~ABDTree(){
-//        std::cout << "~ABDTree()" << std::endl;
+        std::cout << "~ABDTree()" << std::endl;
     }
 
     using DTree<ABDNode>::gdt_r;
@@ -294,9 +294,9 @@ protected:
     void unknown_stats(const node_cptr_t node,
                        std::vector<stat_map_t> &group_stats) const;
 protected:
-    index_t _item_index;
-    index_t _user_index;
-    std::map<id_t, bound_map_t> _node_bounds;
+    std::unique_ptr<index_t> _item_index;
+    std::unique_ptr<index_t> _user_index;
+    std::unique_ptr<std::map<id_t, bound_map_t>> _node_bounds;
     double _bu_reg;
     double _h_smooth;
     std::size_t _top_pop;
@@ -312,30 +312,32 @@ void ABDTree::init(const std::vector<Rating> &training_data, __attribute__((unus
 
 void ABDTree::init(const std::vector<Rating> &training_data){
     double global_mean{0};
+    _item_index = std::unique_ptr<index_t>(new index_t{});
+    _user_index = std::unique_ptr<index_t>(new index_t{});
     for(const auto &rat : training_data){
-        _item_index.insert(rat._item_id, ScoreUnbiased{rat._user_id, rat._value, rat._value});
-        _user_index.insert(rat._user_id, ScoreUnbiased{rat._item_id, rat._value, rat._value});
+        _item_index->insert(rat._item_id, ScoreUnbiased{rat._user_id, rat._value, rat._value});
+        _user_index->insert(rat._user_id, ScoreUnbiased{rat._item_id, rat._value, rat._value});
         global_mean += rat._value;
     }
+    _item_index->sort_all();
+    _user_index->sort_all();
     global_mean /= training_data.size();
-    _item_index.sort_all();
-    _user_index.sort_all();
     compute_biases(global_mean);
     this->_log.log() << "TRAINING:" << std::endl
-                 << "Num. users: " << _user_index.size() << std::endl
-                 << "Num. items: " << _item_index.size() << std::endl;
+                 << "Num. users: " << _user_index->size() << std::endl
+                 << "Num. items: " << _item_index->size() << std::endl;
     //initialize the root of the tree
     this->_root = std::unique_ptr<ABDNode>(new ABDNode(_node_counter++,
                                                        1,
                                                        training_data.size(),
-                                                       _user_index.size(),
+                                                       _user_index->size(),
                                                        _top_pop,
-                                                       _user_index.all_stats()));
+                                                       _user_index->all_stats()));
     compute_root_quality(this->_root.get());
 }
 
 void ABDTree::compute_biases(const double global_mean){
-    for(auto &entry : _user_index){
+    for(auto &entry : *_user_index){
         double bu{};
         // compute the bias for each user
         for(const auto &score : entry.second)
@@ -361,14 +363,14 @@ double ABDTree::squared_error(const stat_map_t &stats) const{
 }
 
 void ABDTree::build(){
-    build(_item_index.keys());
+    build(_item_index->keys());
 }
 
 void ABDTree::build(const std::vector<id_t> &candidates){
     // compute the intersection between candidates and item_index keys
     std::vector<id_t> candidates_sorted(candidates);
     std::sort(candidates_sorted.begin(), candidates_sorted.end());
-    std::vector<id_t> item_index_keys = _item_index.keys();
+    std::vector<id_t> item_index_keys = _item_index->keys();
     std::vector<id_t> intersection(std::min(item_index_keys.size(), candidates_sorted.size()));
     auto it = std::set_intersection(candidates_sorted.cbegin(), candidates_sorted.cend(),
                                     item_index_keys.cbegin(), item_index_keys.cend(),
@@ -377,8 +379,9 @@ void ABDTree::build(const std::vector<id_t> &candidates){
     // assign candidates to the root node
     this->_root->_candidates = std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(intersection));
     // compute root node's bounds
-    for(const auto &entry : _item_index)
-        _node_bounds[this->_root->_id].emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
+    _node_bounds = std::unique_ptr<std::map<id_t, bound_map_t>>(new std::map<id_t, bound_map_t>{});
+    for(const auto &entry : *_item_index)
+        _node_bounds->operator[](this->_root->_id).emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
     // cache root's scores
     if(_cache_enabled)  this->_root->cache_scores(_h_smooth);
     // generate the decision tree
@@ -388,6 +391,10 @@ void ABDTree::build(const std::vector<id_t> &candidates){
             << "\tQuality: " << this->_root->_quality << std::endl;
 
     gdt_r(this->_root.get());
+    //free memory allocated for temporary indices
+    _item_index.reset(nullptr);
+    _user_index.reset(nullptr);
+    _node_bounds.reset(nullptr);
 
 }
 
@@ -428,13 +435,13 @@ void ABDTree::split(node_ptr_t parent,
         children.push_back(std::unique_ptr<ABDNode>(child));
     }
     // compute children boundaries
-    for(auto &entry : _item_index){
-        const auto &item_bounds = _node_bounds.at(parent->_id).at(entry.first);
+    for(auto &entry : *_item_index){
+        const auto &item_bounds = _node_bounds->at(parent->_id).at(entry.first);
         auto it_left = entry.second.begin() + item_bounds._left;
         auto it_right = entry.second.begin() + item_bounds._right;
         const auto g_bounds = sort_by_group(it_left, it_right, item_bounds._left, groups);
         for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
-            _node_bounds[children[gidx]->_id][entry.first] = g_bounds[gidx];
+            _node_bounds->operator[](children[gidx]->_id)[entry.first] = g_bounds[gidx];
             children[gidx]->_num_ratings += g_bounds[gidx].size();
         }
     }
@@ -451,17 +458,17 @@ double ABDTree::split_quality(const node_cptr_t node,
     groups.assign(2, group_t{});
     g_stats.assign(2, stat_map_t());
 
-    auto it_left = _item_index.at(splitter_id).cbegin() + _node_bounds.at(node->_id).at(splitter_id)._left;
-    auto it_right = _item_index.at(splitter_id).cbegin() + _node_bounds.at(node->_id).at(splitter_id)._right;
+    auto it_left = _item_index->at(splitter_id).cbegin() + _node_bounds->at(node->_id).at(splitter_id)._left;
+    auto it_right = _item_index->at(splitter_id).cbegin() + _node_bounds->at(node->_id).at(splitter_id)._right;
 
     for(auto it_score = it_left; it_score < it_right; ++it_score){
         if(it_score->_rating >= 4){  // loved item
             groups[0].push_back(it_score->_id);
-             _user_index.update_stats(g_stats[0], it_score->_id);
+             _user_index->update_stats(g_stats[0], it_score->_id);
 
         }else{  // hated item
             groups[1].push_back(it_score->_id);
-            _user_index.update_stats(g_stats[1], it_score->_id);
+            _user_index->update_stats(g_stats[1], it_score->_id);
         }
     }
     unknown_stats(node, g_stats);
@@ -503,15 +510,21 @@ std::vector<ABDTree::bound_t> ABDTree::sort_by_group(It left,
                                                      const std::vector<group_t> &groups){
     assert(is_ordered(left, right));
     // store the sorted vector chunks in a temp vector (+1 for the unknowns)
-    std::vector<std::vector<typename It::value_type>> chunks(groups.size()+1);
+    std::vector<std::vector<typename It::value_type>> chunks;
+    chunks.reserve(groups.size()+1);
+    for(std::size_t gidx{0}; gidx < groups.size()+1; ++gidx){
+        chunks.push_back(std::vector<typename It::value_type>{});
+        chunks.back().reserve(std::distance(left, right));  // reservef more memory than actually needed..
+    }
     // initialize iterators for each group
     std::vector<group_t::const_iterator> it_groups;
+    it_groups.reserve(groups.size());
     for(const auto &g : groups)
         it_groups.push_back(g.cbegin());
     // split the input range according to groups
     bool unknown{true};
     for(auto it = left; it != right; ++it, unknown = true){
-        for(std::size_t gidx{}; gidx < groups.size(); ++gidx){
+        for(std::size_t gidx{0}; gidx < groups.size(); ++gidx){
             while(it_groups[gidx] < groups[gidx].cend() &&
                   *it_groups[gidx] < it->_id)
                 ++it_groups[gidx];
@@ -525,6 +538,7 @@ std::vector<ABDTree::bound_t> ABDTree::sort_by_group(It left,
     }
     // recompose the range, now ordered, and generate the bounds wrt the item index
     std::vector<bound_t> bounds;
+    bounds.reserve(chunks.size());
     auto it_start = left;
     for(const auto &chunk : chunks){
         std::copy(chunk.cbegin(), chunk.cend(), it_start);

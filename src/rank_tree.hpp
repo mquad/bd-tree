@@ -72,18 +72,21 @@ public:
     // inherith the constructor
     using ABDTree::ABDTree;
     ~RankTree(){
-//        std::cout << "~RankTree()" << std::endl;
+        std::cout << "~RankTree()" << std::endl;
     }
 
     void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data){
+        //TODO: caching is forced for the time. Support for optional caching to be added in future.
+        _cache_enabled = true;
         // initialize the validation index with the validation data
+        _ranking_index = std::unique_ptr<R>(new R{});
         for(const auto &rat : validation_data){
-            _ranking_index.insert(rat._user_id, rat._item_id, rat._value);
+            _ranking_index->insert(rat._user_id, rat._item_id, rat._value);
         }
         ABDTree::init(training_data);
         // initialize root _users member
-        this->_root->_users->reserve(_user_index.size());
-        for(const auto &entry : _user_index)
+        this->_root->_users->reserve(_user_index->size());
+        for(const auto &entry : *_user_index)
             this->_root->_users->push_back(entry.first);
 
     }
@@ -91,16 +94,30 @@ public:
     void init(const std::vector<Rating> &training_data) override{
         //TODO: caching is forced for the time. Support for optional caching to be added in future.
         _cache_enabled = true;
+        _ranking_index = std::unique_ptr<R>(new R{});
         for(const auto &rat : training_data){
-            _ranking_index.insert(rat._user_id, rat._item_id, rat._value);
+            _ranking_index->insert(rat._user_id, rat._item_id, rat._value);
         }
         ABDTree::init(training_data);
         // initialize root _users member
         this->_root->_users = std::unique_ptr<group_t>(new group_t{});
-        this->_root->_users->reserve(_user_index.size());
-        for(const auto &entry : _user_index)
+        this->_root->_users->reserve(_user_index->size());
+        for(const auto &entry : *_user_index)
             this->_root->_users->push_back(entry.first);
     }
+
+    void build(){
+        ABDTree::build();
+        //free ranking index's memory
+        _ranking_index.reset(nullptr);
+    }
+
+    void build(const std::vector<id_t> &candidates){
+        ABDTree::build(candidates);
+        //free ranking index's memory
+        _ranking_index.reset(nullptr);
+    }
+
 protected:
     void compute_root_quality(node_ptr_t node) override;
 
@@ -121,12 +138,12 @@ protected:
     using ABDTree::unknown_stats;
     using ABDTree::_item_index;
     using ABDTree::_user_index;
-    R _ranking_index;
+    std::unique_ptr<R> _ranking_index;
 };
 
 template<typename R>
 void RankTree<R>::compute_root_quality(node_ptr_t node){
-    node->_quality = _ranking_index.evaluate_all(build_ranking(*node->_stats));
+    node->_quality = _ranking_index->evaluate_all(build_ranking(*node->_stats));
 }
 
 template<typename R>
@@ -167,16 +184,16 @@ double RankTree<R>::split_quality(const node_cptr_t node,
     groups.assign(2, group_t{});
     g_stats.assign(2, stat_map_t());
 
-    auto it_left = this->_item_index.at(splitter_id).cbegin() + this->_node_bounds.at(node->_id).at(splitter_id)._left;
-    auto it_right = this->_item_index.at(splitter_id).cbegin() + this->_node_bounds.at(node->_id).at(splitter_id)._right;
+    auto it_left = this->_item_index->at(splitter_id).cbegin() + this->_node_bounds->at(node->_id).at(splitter_id)._left;
+    auto it_right = this->_item_index->at(splitter_id).cbegin() + this->_node_bounds->at(node->_id).at(splitter_id)._right;
 
     for(auto it_score = it_left; it_score < it_right; ++it_score){
         if(it_score->_rating >= 4){  // loved item
             groups[0].push_back(it_score->_id);
-            this->_user_index.update_stats(g_stats[0], it_score->_id);
+            this->_user_index->update_stats(g_stats[0], it_score->_id);
         }else{  // hated item
             groups[1].push_back(it_score->_id);
-            this->_user_index.update_stats(g_stats[1], it_score->_id);
+            this->_user_index->update_stats(g_stats[1], it_score->_id);
         }
     }
     unknown_stats(node, g_stats);
@@ -185,12 +202,12 @@ double RankTree<R>::split_quality(const node_cptr_t node,
     for(std::size_t gidx{0u}; gidx < groups.size(); ++gidx){
         if(node->_level > 1){
             g_qualities.emplace_back(
-                        _ranking_index.evaluate_users(
+                        _ranking_index->evaluate_users(
                             build_ranking(g_stats[gidx], *node->_scores, this->_h_smooth),
                             groups[gidx]));
         }else{
             g_qualities.emplace_back(
-                        _ranking_index.evaluate_users(
+                        _ranking_index->evaluate_users(
                             build_ranking(g_stats[gidx]),
                             groups[gidx]));
         }

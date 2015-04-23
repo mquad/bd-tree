@@ -50,6 +50,10 @@ public:
         if(release_temp)
             this->release_temp();
     }
+
+    void release_temp_py(){
+        this->release_temp();
+    }
 };
 
 template<typename R>
@@ -68,14 +72,15 @@ public:
 
     void init_py(const py::list &training){
         std::vector<Rating> training_data;
-        training_data.reserve(py::len(training));
-        for(int t{}; t < py::len(training); ++t){
+        long int size{py::len(training)};
+        training_data.reserve(size);
+        for(long int t{0u}; t < size; ++t){
             py::tuple rating = py::extract<py::tuple>(training[t]);
             training_data.push_back(Rating(
                                         py::extract<std::size_t>(rating[0]),
                                         py::extract<std::size_t>(rating[1]),
                                         py::extract<double>(rating[2])
-                    ));
+                                        ));
         }
         this->init(training_data);
     }
@@ -92,12 +97,16 @@ public:
             this->release_temp();
     }
 
+    void release_temp_py(){
+        this->release_temp();
+    }
 };
 
 template<typename C, typename X1>
 void expose_tree_methods(py::class_<C, X1> c) {
   c.def("init", &C::init_py)
-          .def("build", &C::build_py);
+          .def("build", &C::build_py)
+          .def("release_temp", &C::release_temp_py);
 }
 
 template<typename T>
