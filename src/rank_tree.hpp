@@ -9,9 +9,11 @@
 
 template<typename Key, typename Metric>
 struct RankIndex{
-    using entry_t = std::unordered_map<Key, double>;
+    using entry_t = std::vector<Key>;
+    using relevance_t = std::unordered_map<Key, double>;
 protected:
     std::map<Key, entry_t> _index;
+    std::map<Key, relevance_t> _relevances;
 public:
     // accessors for some basic properties
     std::size_t size() const    {return _index.size();}
@@ -25,7 +27,12 @@ public:
     decltype(_index.cend()) cend() const        {return _index.cend();}
 
     void insert(const Key &key, const Key &item, const double &rating){
-        _index[key].emplace(item, rating);
+        _relevances[key].emplace(item, rating);
+    }
+
+    void persist(){
+        for(auto &entry : _relevances)
+            _index[entry.first] = keys_sorted_by_relevance(entry.second);
     }
 
     // return the -sorted- key vector
@@ -33,29 +40,39 @@ public:
         return extract_keys(_index);
     }
 
-    double evaluate_all(const std::vector<Key> &ranking){
-        return evaluate_users(ranking, keys());
+    double evaluate_all(const std::vector<Key> &global_ranking){
+        return evaluate_users(global_ranking, keys());
     }
 
-    double evaluate_users(const std::vector<Key> &ranking, const std::vector<Key> &users) const{
+    double evaluate_users(const std::vector<Key> &global_ranking, const std::vector<Key> &users) const{
         double m{.0};
         for(const auto &u : users)
-            m += evaluate_user(ranking, u);
+            m += evaluate_user(global_ranking, u);
         return m;
     }
 
-    double evaluate_user(const std::vector<Key> &ranking, const Key &user) const{
+    double evaluate_user(const std::vector<Key> &global_ranking, const Key &user) const{
         if(_index.count(user) > 0){
-            const auto &user_relevance = _index.at(user);
+            const auto &user_relevance = _relevances.at(user);
+            const auto &best_ranking = _index.at(user);
             // compute the ranking only on items rated by the user
             std::vector<Key> user_ranking;
             user_ranking.reserve(user_relevance.size());
-            for(const auto key : ranking)
+            for(const auto key : global_ranking)
                 if(user_relevance.count(key) > 0)
                     user_ranking.push_back(key);
-            return Metric::eval(user_ranking, user_relevance);
+            return Metric::eval_fast(user_ranking, best_ranking, user_relevance);
         }
         return .0;
+    }
+protected:
+    std::vector<Key> keys_sorted_by_relevance(const relevance_t &relevance){
+        std::vector<Key> best_ranking(extract_keys(relevance));
+        std::sort(best_ranking.begin(), best_ranking.end(),
+                  [&](const Key &lhs, const Key &rhs){
+            return relevance.at(lhs) > relevance.at(rhs);
+        });
+        return best_ranking;
     }
 };
 
@@ -83,8 +100,10 @@ public:
         for(const auto &rat : validation_data){
             _ranking_index->insert(rat._user_id, rat._item_id, rat._value);
         }
+        _ranking_index->persist();
         ABDTree::init(training_data);
         // initialize root _users member
+        this->_root->_users = std::unique_ptr<group_t>(new group_t{});
         this->_root->_users->reserve(_user_index->size());
         for(const auto &entry : *_user_index)
             this->_root->_users->push_back(entry.first);
@@ -98,6 +117,7 @@ public:
         for(const auto &rat : training_data){
             _ranking_index->insert(rat._user_id, rat._item_id, rat._value);
         }
+        _ranking_index->persist();
         ABDTree::init(training_data);
         // initialize root _users member
         this->_root->_users = std::unique_ptr<group_t>(new group_t{});
