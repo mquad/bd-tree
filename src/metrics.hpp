@@ -51,6 +51,9 @@ struct Precision{
         }
         return (double) rel_count / length;
     }
+    static double eval_fast(const std::vector<Key> &ranking, __attribute__((unused))  const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
+        return eval(ranking, relevance);
+    }
 };
 
 template<std::size_t N = 10, int RelTh = 4, typename Key = std::size_t>
@@ -61,7 +64,6 @@ struct AveragePrecision{
         for(const auto &entry : relevance)
             if(entry.second >= RelTh)
                 ++num_relevant;
-
         if(num_relevant > 0){
             std::size_t rel_count{0}, rank{1};
             auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
@@ -75,6 +77,9 @@ struct AveragePrecision{
             return 0;
         }
     }
+    static double eval_fast(const std::vector<Key> &ranking, __attribute__((unused))  const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
+        return eval(ranking, relevance);
+    }
 };
 
 template<std::size_t N = 10, typename Key = std::size_t>
@@ -86,6 +91,9 @@ struct NDCG{
                   [&](const Key &lhs, const Key &rhs){
             return relevance.at(lhs) > relevance.at(rhs);
         });
+        return DCG(ranking, relevance) / DCG(best_ranking, relevance);
+    }
+    static double eval_fast(const std::vector<Key> &ranking, const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
         return DCG(ranking, relevance) / DCG(best_ranking, relevance);
     }
 private:
@@ -112,6 +120,10 @@ struct HLU{
         });
         return _HLU(ranking, relevance) / _HLU(best_ranking, relevance);
     }
+    static double eval_fast(const std::vector<Key> &ranking, const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
+        return _HLU(ranking, relevance) / _HLU(best_ranking, relevance);
+    }
+
 private:
     static double _HLU(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
         double hlu{.0};
