@@ -176,29 +176,33 @@ void ABDNode::cache_scores(const double h_smooth){
     _scores = std::unique_ptr<std::map<id_t, double> >(new std::map<id_t, double>{});
     if(_parent != nullptr){
         // user average prediction
+        auto it_hint = _predictions->end();
         for(const auto &p_pred : (*_parent->_predictions)){
             if(_stats->count(p_pred.first) > 0){
-                _predictions->emplace(p_pred.first, _stats->at(p_pred.first).pred(p_pred.second, h_smooth));
+                it_hint = _predictions->emplace_hint(it_hint, p_pred.first, _stats->at(p_pred.first).pred(p_pred.second, h_smooth));
             }else{
-                _predictions->emplace(p_pred.first, p_pred.second);
+                it_hint = _predictions->emplace_hint(it_hint, p_pred.first, p_pred.second);
             }
         }
         // user unbiased average prediction
         // i.e., average deviation from the user average prediction
+        it_hint = _scores->end();
         for(const auto &p_score : (*_parent->_scores)){
             if(_stats->count(p_score.first) > 0){
-                _scores->emplace(p_score.first, _stats->at(p_score.first).score(p_score.second, h_smooth));
+                it_hint = _scores->emplace_hint(it_hint, p_score.first, _stats->at(p_score.first).score(p_score.second, h_smooth));
             }else{
-                _scores->emplace(p_score.first, p_score.second);
+                it_hint = _scores->emplace_hint(it_hint, p_score.first, p_score.second);
             }
         }
     }else{
         //root node
+        auto it_hint = _predictions->end();
         for(const auto &s : (*this->_stats)){
-            _predictions->emplace(s.first, s.second.pred());
+            it_hint = _predictions->emplace_hint(it_hint, s.first, s.second.pred());
         }
+        it_hint = _scores->end();
         for(const auto &s : (*this->_stats)){
-            _scores->emplace(s.first, s.second.score());
+            it_hint = _scores->emplace_hint(it_hint, s.first, s.second.score());
         }
     }
 }
@@ -557,6 +561,9 @@ void ABDTree::unknown_stats(const node_cptr_t node,
     // initialize the pointers to the current element for each stats
     std::vector<decltype(node->_stats->cbegin())> it_stats;
     it_stats.reserve(group_stats.size());
+    // const_iterator for emplace_hint on the stat_map for the unknown statistics
+    auto it_hint = group_stats.back().end();
+
     for(const auto &s : group_stats)
         it_stats.push_back(s.cbegin());
     // pass over all the stats simultaneously and
@@ -574,7 +581,7 @@ void ABDTree::unknown_stats(const node_cptr_t node,
             }
         }
         if(unknown_stats._n > 0)
-            group_stats.back().emplace(item, unknown_stats);
+            it_hint = group_stats.back().emplace_hint(it_hint, item, unknown_stats);
     }
 }
 
