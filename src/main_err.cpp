@@ -2,7 +2,7 @@
 #include "stopwatch.hpp"
 #include "d_tree_eval.hpp"
 
-constexpr unsigned N = 10;
+constexpr unsigned N = 20;
 
 void print_usage_build(){
     std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl
@@ -90,13 +90,13 @@ int main(int argc, char **argv)
         auto rmse = evaluate_error<decltype(bdtree), RMSE<>>(bdtree, query_profiles, test_profiles);
         ofs << "RMSE=["; print_range(ofs, rmse.cbegin(), rmse.cend()) << "]" << std::endl;
         auto p = evaluate_ranking<decltype(bdtree), Precision<N>>(bdtree, query_profiles, test_profiles);
-        ofs << "Precision@" << N << "=["; print_range(ofs, p.cbegin(), p.cend()) << "]" << std::endl;
+        ofs << "Precision_at_" << N << "=["; print_range(ofs, p.cbegin(), p.cend()) << "]" << std::endl;
         auto map = evaluate_ranking<decltype(bdtree), AveragePrecision<N>>(bdtree, query_profiles, test_profiles);
-        ofs << "MAP@" << N << "=["; print_range(ofs, map.cbegin(), map.cend()) << "]" << std::endl;
+        ofs << "MAP_at_" << N << "=["; print_range(ofs, map.cbegin(), map.cend()) << "]" << std::endl;
         auto ndcg = evaluate_ranking<decltype(bdtree), NDCG<N>>(bdtree, query_profiles, test_profiles);
-        ofs << "NDCG@" << N << "=["; print_range(ofs, ndcg.cbegin(), ndcg.cend()) << "]" << std::endl;
+        ofs << "NDCG_at_" << N << "=["; print_range(ofs, ndcg.cbegin(), ndcg.cend()) << "]" << std::endl;
         auto hlu = evaluate_ranking<decltype(bdtree), HLU<N,5>>(bdtree, query_profiles, test_profiles);
-        ofs << "HLU@" << N << "=["; print_range(ofs, hlu.cbegin(), hlu.cend()) << "]" << std::endl;
+        ofs << "HLU_at_" << N << "=["; print_range(ofs, hlu.cbegin(), hlu.cend()) << "]" << std::endl;
         std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
         return 0;
 
