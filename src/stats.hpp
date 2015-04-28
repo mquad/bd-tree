@@ -80,7 +80,7 @@ double compute_quality(const StatMap<K, S> &map){
 
 
 template<typename K, typename S>
-std::vector<K> build_ranking(const StatMap<K, S> &stats){
+std::vector<K> rank_all_items(const StatMap<K, S> &stats){
     std::vector<std::pair<K, double>> items_by_score;
     for(const auto &entry : stats)
         items_by_score.emplace_back(entry.first, entry.second.score());
@@ -96,9 +96,8 @@ std::vector<K> build_ranking(const StatMap<K, S> &stats){
     return ranking;
 }
 
-
 template<typename K, typename S>
-std::vector<K> build_ranking(const StatMap<K, S> &stats, const std::map<K, double> &parent_scores, const double h_smooth){
+std::vector<K> rank_all_items(const StatMap<K, S> &stats, const std::map<K, double> &parent_scores, const double h_smooth){
     // sort items by smoothed score
     std::vector<std::pair<K, double>> items_by_score;
     items_by_score.reserve(parent_scores.size());
