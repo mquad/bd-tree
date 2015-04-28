@@ -52,7 +52,14 @@ struct Precision{
         return (double) rel_count / length;
     }
     static double eval_fast(const std::vector<Key> &ranking, __attribute__((unused))  const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
-        return eval(ranking, relevance);
+        std::size_t rel_count{0};
+        auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
+        auto length = std::distance(ranking.cbegin(), it_end);
+        for(auto it = ranking.cbegin(); it != it_end; ++it){
+            if(relevance.at(*it) >= RelTh)
+                ++rel_count;
+        }
+        return (double) rel_count / length;
     }
 };
 
@@ -78,7 +85,22 @@ struct AveragePrecision{
         }
     }
     static double eval_fast(const std::vector<Key> &ranking, __attribute__((unused))  const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
-        return eval(ranking, relevance);
+        double p_at_k{.0};
+        std::size_t num_relevant{0};
+        for(const auto &entry : relevance)
+            if(entry.second >= RelTh)
+                ++num_relevant;
+        if(num_relevant > 0){
+            std::size_t rel_count{0}, rank{1};
+            auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
+            for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
+                if(relevance.at(*it) >= RelTh)
+                    p_at_k += (double) ++rel_count / rank;
+            }
+            return p_at_k / num_relevant;
+        } else {
+            return 0;
+        }
     }
 };
 
@@ -94,7 +116,7 @@ struct NDCG{
         return DCG(ranking, relevance) / DCG(best_ranking, relevance);
     }
     static double eval_fast(const std::vector<Key> &ranking, const std::vector<Key> &best_ranking, const std::unordered_map<Key, double> &relevance){
-        return DCG(ranking, relevance) / DCG(best_ranking, relevance);
+        return DCG_fast(ranking, relevance) / DCG_fast(best_ranking, relevance);
     }
 private:
     static double DCG(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
@@ -104,6 +126,15 @@ private:
         for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
             if(relevance.count(*it) > 0)
                 dcg += (std::pow(2, relevance.at(*it))-1) / std::log2(rank+1);
+        }
+        return dcg;
+    }
+    static double DCG_fast(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
+        double dcg{.0};
+        std::size_t rank{1};
+        auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
+        for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
+            dcg += (std::pow(2, relevance.at(*it))-1) / std::log2(rank+1);
         }
         return dcg;
     }
@@ -132,6 +163,15 @@ private:
         for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
             if(relevance.count(*it) > 0)
                 hlu += relevance.at(*it) / std::pow(2, (rank-1) / (HL-1));
+        }
+        return hlu;
+    }
+    static double _HLU_fast(const std::vector<Key> &ranking, const std::unordered_map<Key, double> &relevance){
+        double hlu{.0};
+        std::size_t rank{1};
+        auto it_end = ranking.size() > N ? ranking.cbegin() + N : ranking.cend();
+        for(auto it = ranking.cbegin(); it != it_end; ++it, ++rank){
+            hlu += relevance.at(*it) / std::pow(2, (rank-1) / (HL-1));
         }
         return hlu;
     }

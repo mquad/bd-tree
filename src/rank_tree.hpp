@@ -9,52 +9,46 @@
 
 template<typename Key, typename Metric>
 struct RankIndex{
-    using entry_t = std::vector<Key>;
+    using ranking_t = std::vector<Key>;
     using relevance_t = std::unordered_map<Key, double>;
 protected:
     std::unordered_map<Key, relevance_t> _relevances;
-    std::unordered_map<Key, entry_t> _best_rankings;
-    std::unordered_map<Key, bool> _persisted;
+    std::unordered_map<Key, ranking_t> _best_rankings;
 public:
     void insert(const Key &key, const Key &item, const double &rating){
-        _relevances[key].emplace(item, rating);
-        _persisted[key] = false;
+        _relevances[key].emplace(item, rating);   // emplace a new value in the relevance map
     }
 
     // return the -unordered- key vector
     std::vector<Key> keys(){
-        return extract_keys(_best_rankings);
+        return extract_keys(_relevances);
     }
 
     double evaluate_all(const std::vector<Key> &global_ranking){
+        const auto &users = extract_keys(_relevances);
+        // persist the optimal ranking for user to speed up further evaluations
+        for(const auto &user : users)
+            _best_rankings[user] = keys_sorted_by_relevance(_relevances.at(user));
         return evaluate_users(global_ranking, keys());
     }
 
-    double evaluate_users(const std::vector<Key> &global_ranking, const std::vector<Key> &users){
+    double evaluate_users(const std::vector<Key> &global_ranking, const std::vector<Key> &users) const{
         double m{.0};
         for(const auto &u : users)
             m += evaluate_user(global_ranking, u);
         return m;
     }
 
-    double evaluate_user(const std::vector<Key> &global_ranking, const Key &user){
-        if(_relevances.count(user) > 0){
-            if(!_persisted.at(user)){
-                // persist the optimal ranking for user to speed up further evaluations
-                _best_rankings[user] = keys_sorted_by_relevance(_relevances.at(user));
-                _persisted[user] = true;
-            }
-            const auto &user_relevance = _relevances.at(user);
-            const auto &best_ranking = _best_rankings.at(user);
-            // compute the ranking only on items rated by the user
-            std::vector<Key> user_ranking;
-            user_ranking.reserve(user_relevance.size());
-            for(const auto key : global_ranking)
-                if(user_relevance.count(key) > 0)
-                    user_ranking.push_back(key);
-            return Metric::eval_fast(user_ranking, best_ranking, user_relevance);
-        }
-        return .0;
+    double evaluate_user(const std::vector<Key> &global_ranking, const Key &user) const{
+        const auto &user_relevance = _relevances.at(user);
+        const auto &best_ranking = _best_rankings.at(user);
+        // compute the ranking only on items rated by the user
+        std::vector<Key> user_ranking;
+        user_ranking.reserve(user_relevance.size());
+        for(const auto key : global_ranking)
+            if(user_relevance.count(key) > 0)
+                user_ranking.push_back(key);
+        return Metric::eval_fast(user_ranking, best_ranking, user_relevance);
     }
 protected:
     std::vector<Key> keys_sorted_by_relevance(const relevance_t &relevance){
@@ -152,7 +146,7 @@ protected:
 
 template<typename R>
 void RankTree<R>::compute_root_quality(node_ptr_t node){
-    node->_quality = _ranking_index->evaluate_all(build_ranking(*node->_stats));
+    node->_quality = _ranking_index->evaluate_all(rank_all_items(*node->_stats));
 }
 
 template<typename R>
@@ -212,12 +206,12 @@ double RankTree<R>::split_quality(const node_cptr_t node,
         if(node->_level > 1){
             g_qualities.emplace_back(
                         _ranking_index->evaluate_users(
-                            build_ranking(g_stats[gidx], *node->_scores, this->_h_smooth),
+                            rank_all_items(g_stats[gidx], *node->_scores, this->_h_smooth),
                             groups[gidx]));
         }else{
             g_qualities.emplace_back(
                         _ranking_index->evaluate_users(
-                            build_ranking(g_stats[gidx]),
+                            rank_all_items(g_stats[gidx]),
                             groups[gidx]));
         }
         quality += g_qualities.back();
