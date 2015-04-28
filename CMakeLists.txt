@@ -20,7 +20,7 @@ include_directories(${Boost_INCLUDE_DIR})
 #configure the compiler
 set (CMAKE_CXX_COMPILER "g++")
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -pedantic -fopenmp")
-set (CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
+set (CMAKE_CXX_FLAGS_DEBUG "-Ofast -g -pg")
 set (CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -DNDEBUG")
 
 #add subdirectories
