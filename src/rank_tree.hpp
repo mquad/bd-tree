@@ -48,6 +48,7 @@ public:
     }
 
     double evaluate_user(const std::vector<Key> &global_ranking, const Key &user){
+        if(_relevances.count(user) == 0)    return .0;
         auto &user_relevance = _relevances[user];
         auto &best_ranking = _best_rankings[user];
         // compute the ranking only on items rated by the user
