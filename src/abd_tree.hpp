@@ -276,7 +276,7 @@ public:
 
 protected:
     void compute_biases(const double global_mean);
-    void compute_root_quality(node_ptr_t node) override;
+    void compute_root_quality() override;
 
     template<typename It>
     std::vector<bound_t> sort_by_group(It left,
@@ -337,7 +337,7 @@ void ABDTree::init(const std::vector<Rating> &training_data){
                                                        _user_index->size(),
                                                        _top_pop,
                                                        _user_index->all_stats()));
-    compute_root_quality(this->_root.get());
+    compute_root_quality();
 }
 
 void ABDTree::compute_biases(const double global_mean){
@@ -354,8 +354,8 @@ void ABDTree::compute_biases(const double global_mean){
     }
 }
 
-void ABDTree::compute_root_quality(node_ptr_t node){
-    node->_quality = -squared_error(*node->_stats);
+void ABDTree::compute_root_quality(){
+    _root->_quality = -squared_error(*_root->_stats);
 }
 
 double ABDTree::squared_error(const stat_map_t &stats) const{

@@ -55,7 +55,7 @@ public:
     unsigned depth_max() const  {return _depth_max;}
 
 protected:
-    virtual void compute_root_quality(node_ptr_t node) = 0;
+    virtual void compute_root_quality() = 0;
 
     void find_splitter(const node_cptr_t node,
                        id_t &splitter,

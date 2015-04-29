@@ -16,7 +16,7 @@ protected:
     std::unordered_map<Key, ranking_t> _best_rankings;
 public:
     void insert(const Key &key, const Key &item, const double &rating){
-        _relevances[key].emplace(item, rating);   // emplace a new value in the relevance map
+        _relevances[key].emplace(item, rating);
     }
 
     // return the -unordered- key vector
@@ -122,7 +122,7 @@ public:
     }
 
 protected:
-    void compute_root_quality(node_ptr_t node) override;
+    void compute_root_quality() override;
 
     void split(node_ptr_t node,
                const id_t splitter_id,
@@ -145,8 +145,8 @@ protected:
 };
 
 template<typename R>
-void RankTree<R>::compute_root_quality(node_ptr_t node){
-    node->_quality = _ranking_index->evaluate_all(rank_all_items(*node->_stats));
+void RankTree<R>::compute_root_quality(){
+    _root->_quality = _ranking_index->evaluate_all(rank_all_items(*_root->_stats));
 }
 
 template<typename R>
