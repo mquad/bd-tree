@@ -7,7 +7,7 @@
 #include "d_tree.hpp"
 #include "metrics.hpp"
 
-using user_profiles_t = std::map<unsigned long, profile_t>;
+using user_profiles_t = std::map<id_type, profile_t>;
 
 double build_profiles(const std::string &filename, user_profiles_t &profiles){
     std::ifstream ifs(filename);
@@ -21,6 +21,8 @@ double build_profiles(const std::string &filename, user_profiles_t &profiles){
         iss >> user_id;
         iss >> item_id;
         iss >> rating;
+        if(profiles.count(user_id) == 0)
+            profiles[user_id].set_empty_key(-1);
         profiles[user_id][item_id] = rating;
         sum += rating;
         ++n;
@@ -30,8 +32,8 @@ double build_profiles(const std::string &filename, user_profiles_t &profiles){
 
 template<typename T, typename Metric>
 std::vector<double> evaluate_error(const T &dtree,
-                                     const user_profiles_t &answers,
-                                     const user_profiles_t &test){
+                                     user_profiles_t &answers,
+                                     user_profiles_t &test){
     std::vector<double> metric_avg(dtree.depth_max(), .0);
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
@@ -63,8 +65,8 @@ std::vector<double> evaluate_error(const T &dtree,
 
 template<typename T, typename Metric, int RelTh = 4>
 std::vector<double> evaluate_ranking(const T &dtree,
-                                     const user_profiles_t &answers,
-                                     const user_profiles_t &test){
+                                     user_profiles_t &answers,
+                                     user_profiles_t &test){
     std::vector<double> metric_avg(dtree.depth_max(), .0);
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){

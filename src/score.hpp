@@ -2,13 +2,14 @@
 #define SCORE_HPP
 #include <iostream>
 #include "aux.hpp"
+#include "types.hpp"
 
 struct ScoreUnbiased{
-    std::size_t _id;
+    id_type _id;
     double _rating;
     double _rating_unbiased;
 
-    ScoreUnbiased(std::size_t id, double rating, double rating_unbiased) :
+    ScoreUnbiased(id_type id, double rating, double rating_unbiased) :
         _id{id}, _rating{rating}, _rating_unbiased{rating_unbiased}{}
     ScoreUnbiased() : ScoreUnbiased(0u, .0, .0){}
 

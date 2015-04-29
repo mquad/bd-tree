@@ -562,7 +562,7 @@ struct BDTree{
         return bounds;
     }
 
-    BDNode_cptr traverse(const profile_t &answers) const{
+    BDNode_cptr traverse(const hash_map_t &answers) const{
         BDNode_cptr node_ptr = _root.get();
         while(!node_ptr->_children.empty()){
             if(answers.count(node_ptr->_splitter) == 0){

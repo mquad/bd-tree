@@ -3,17 +3,17 @@
 #include <boost/fusion/adapted.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <boost/spirit/include/qi.hpp>
-#include <map>
 #include <sstream>
+#include "types.hpp"
 
 namespace qi = boost::spirit::qi;
 
 struct Rating{
-    std::size_t _user_id;
-    std::size_t _item_id;
+    id_type _user_id;
+    id_type _item_id;
     double _value;
 
-    Rating(const std::size_t user_id, const std::size_t item_id, double value):
+    Rating(const id_type user_id, const id_type item_id, double value):
         _user_id{user_id}, _item_id{item_id}, _value{value}{}
     Rating() : _user_id{0}, _item_id{0}, _value{.0}{}
     Rating(const std::string &rating_str){
@@ -40,7 +40,7 @@ struct Rating{
     }
 
 };
-BOOST_FUSION_ADAPT_STRUCT(Rating, (std::size_t, _user_id)(std::size_t, _item_id)(double, _value))
+BOOST_FUSION_ADAPT_STRUCT(Rating, (id_type, _user_id)(id_type, _item_id)(double, _value))
 
 
 #endif // RATING_HPP

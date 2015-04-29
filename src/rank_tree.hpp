@@ -2,21 +2,29 @@
 #define RANKTREE_HPP
 #include <algorithm>
 #include <cstdio>
-#include <unordered_set>
 #include "abd_tree.hpp"
 #include "aux.hpp"
 #include "stopwatch.hpp"
+#include "types.hpp"
 
 template<typename Key, typename Metric>
 struct RankIndex{
     using ranking_t = std::vector<Key>;
-    using relevance_t = std::unordered_map<Key, double>;
+    using relevance_t = hash_map_t<Key, double>;
 protected:
-    std::unordered_map<Key, relevance_t> _relevances;
-    std::unordered_map<Key, ranking_t> _best_rankings;
+    hash_map_t<Key, relevance_t> _relevances;
+    hash_map_t<Key, ranking_t> _best_rankings;
 public:
+    RankIndex(){
+        _relevances.set_empty_key(-1);
+        _best_rankings.set_empty_key(-1);
+    }
+
     void insert(const Key &key, const Key &item, const double &rating){
-        _relevances[key].emplace(item, rating);
+        if(_relevances.count(key) == 0){
+            _relevances[key].set_empty_key(-1);
+        }
+        _relevances[key].insert(std::make_pair(item, rating));
     }
 
     // return the -unordered- key vector
@@ -28,20 +36,20 @@ public:
         const auto &users = extract_keys(_relevances);
         // persist the optimal ranking for user to speed up further evaluations
         for(const auto &user : users)
-            _best_rankings[user] = keys_sorted_by_relevance(_relevances.at(user));
+            _best_rankings[user] = keys_sorted_by_relevance(_relevances[user]);
         return evaluate_users(global_ranking, keys());
     }
 
-    double evaluate_users(const std::vector<Key> &global_ranking, const std::vector<Key> &users) const{
+    double evaluate_users(const std::vector<Key> &global_ranking, const std::vector<Key> &users){
         double m{.0};
         for(const auto &u : users)
             m += evaluate_user(global_ranking, u);
         return m;
     }
 
-    double evaluate_user(const std::vector<Key> &global_ranking, const Key &user) const{
-        const auto &user_relevance = _relevances.at(user);
-        const auto &best_ranking = _best_rankings.at(user);
+    double evaluate_user(const std::vector<Key> &global_ranking, const Key &user){
+        auto &user_relevance = _relevances[user];
+        auto &best_ranking = _best_rankings[user];
         // compute the ranking only on items rated by the user
         std::vector<Key> user_ranking;
         user_ranking.reserve(user_relevance.size());
@@ -52,10 +60,11 @@ public:
     }
 protected:
     std::vector<Key> keys_sorted_by_relevance(const relevance_t &relevance){
+        auto &relevance_non_const = const_cast<relevance_t&>(relevance);
         std::vector<Key> best_ranking(extract_keys(relevance));
         std::sort(best_ranking.begin(), best_ranking.end(),
                   [&](const Key &lhs, const Key &rhs){
-            return relevance.at(lhs) > relevance.at(rhs);
+            return relevance_non_const[lhs] > relevance_non_const[rhs];
         });
         return best_ranking;
     }
@@ -67,7 +76,6 @@ protected:
     using ABDTree::index_t;
     using ABDTree::stat_map_t;
 public:
-    using ABDTree::id_t;
     using ABDTree::node_ptr_t;
     using ABDTree::node_cptr_t;
 public:
@@ -115,7 +123,7 @@ public:
         _ranking_index.reset(nullptr);
     }
 
-    void build(const std::vector<id_t> &candidates){
+    void build(const std::vector<id_type> &candidates){
         ABDTree::build(candidates);
         //free ranking index's memory
         _ranking_index.reset(nullptr);
@@ -125,14 +133,14 @@ protected:
     void compute_root_quality() override;
 
     void split(node_ptr_t node,
-               const id_t splitter_id,
+               const id_type splitter_id,
                const double splitter_quality,
                std::vector<group_t> &groups,
                std::vector<double> &g_qualities,
                std::vector<stat_map_t> &g_stats) override;
 
     double split_quality(const node_cptr_t node,
-                         const id_t splitter_id,
+                         const id_type splitter_id,
                          std::vector<group_t> &groups,
                          std::vector<double> &g_qualities,
                          std::vector<stat_map_t> &g_stats) const override;
@@ -151,7 +159,7 @@ void RankTree<R>::compute_root_quality(){
 
 template<typename R>
 void RankTree<R>::split(node_ptr_t node,
-                             const id_t splitter_id,
+                             const id_type splitter_id,
                              const double splitter_quality,
                              std::vector<group_t> &groups,
                              std::vector<double> &g_qualities,
@@ -174,7 +182,7 @@ void RankTree<R>::split(node_ptr_t node,
 
 template<typename R>
 double RankTree<R>::split_quality(const node_cptr_t node,
-                                     const id_t splitter_id,
+                                     const id_type splitter_id,
                                      std::vector<group_t> &groups,
                                      std::vector<double> &g_qualities,
                                      std::vector<stat_map_t> &g_stats) const{
@@ -187,8 +195,8 @@ double RankTree<R>::split_quality(const node_cptr_t node,
     groups.assign(2, group_t{});
     g_stats.assign(2, stat_map_t());
 
-    auto it_left = this->_item_index->at(splitter_id).cbegin() + this->_node_bounds->at(node->_id).at(splitter_id)._left;
-    auto it_right = this->_item_index->at(splitter_id).cbegin() + this->_node_bounds->at(node->_id).at(splitter_id)._right;
+    auto it_left = this->_item_index->at(splitter_id).cbegin() + (*_node_bounds)[node->_id][splitter_id]._left;
+    auto it_right = this->_item_index->at(splitter_id).cbegin() + (*_node_bounds)[node->_id][splitter_id]._right;
 
     for(auto it_score = it_left; it_score < it_right; ++it_score){
         if(it_score->_rating >= 4){  // loved item

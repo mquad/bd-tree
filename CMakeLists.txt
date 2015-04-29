@@ -20,14 +20,14 @@ include_directories(${Boost_INCLUDE_DIR})
 #configure the compiler
 set (CMAKE_CXX_COMPILER "g++")
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -pedantic -fopenmp")
-set (CMAKE_CXX_FLAGS_DEBUG "-O3 -g")
-set (CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+set (CMAKE_CXX_FLAGS_DEBUG "-Ofast -g")
+set (CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -DNDEBUG")
 
 #add subdirectories
 add_subdirectory(src)       #application sources
-add_subdirectory(test)      #tests
+#add_subdirectory(test)      #tests
 
 #add test target (make test)
-enable_testing()
-add_test(NAME BDTreeTest COMMAND bd_tree_test)
-add_test(NAME MetricsTest COMMAND metrics_test)
+#enable_testing()
+#add_test(NAME BDTreeTest COMMAND bd_tree_test)
+#add_test(NAME MetricsTest COMMAND metrics_test)

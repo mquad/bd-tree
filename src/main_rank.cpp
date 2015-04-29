@@ -4,10 +4,11 @@
 #include "d_tree_eval.hpp"
 
 constexpr unsigned N = 20;
-using PrecIndex = RankIndex<std::size_t, Precision<N>>;
-using APIndex = RankIndex<std::size_t, AveragePrecision<N>>;
-using NDCGIndex = RankIndex<std::size_t, NDCG<N>>;
-using HLUIndex = RankIndex<std::size_t, HLU<N>>;
+using PrecIndex = RankIndex<id_type, Precision<N>>;
+using APIndex = RankIndex<id_type, AveragePrecision<N>>;
+using NDCGIndex = RankIndex<id_type, NDCG<N>>;
+using HLUIndex = RankIndex<id_type, HLU<N>>;
+
 
 void print_usage_build(){
     std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl

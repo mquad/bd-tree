@@ -6,14 +6,14 @@
 #include "abd_index.hpp"
 #include "d_tree.hpp"
 #include "stats.hpp"
+#include "types.hpp"
 
 struct ABDNode{
-    using id_t = std::size_t;
-    using stat_map_t = StatMap<id_t, ABDStats>;
+    using stat_map_t = StatMap<id_type, ABDStats>;
 
     ABDNode(const ABDNode* parent,
-            id_t id,
-            id_t splitter_id,
+            id_type id,
+            id_type splitter_id,
             bool is_unknown,
             bool is_leaf,
             unsigned level,
@@ -23,16 +23,16 @@ struct ABDNode{
             std::size_t num_ratings,
             std::size_t top_pop,
             const stat_map_t &stats,
-            const std::vector<id_t> &candidates):
+            const std::vector<id_type> &candidates):
         _parent{parent}, _children{},
         _id{id}, _splitter_id{splitter_id}, _is_unknown{is_unknown}, _is_leaf{is_leaf},
         _level{level}, _quality{quality}, _split_quality{split_quality},
         _num_users{num_users}, _num_ratings{num_ratings}, _top_pop{top_pop},
         _stats{std::unique_ptr<stat_map_t>(new stat_map_t{stats})},
-        _candidates{std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(candidates))},
+        _candidates{std::unique_ptr<std::vector<id_type>>(new std::vector<id_type>(candidates))},
         _users{nullptr}{ }
 
-    ABDNode(id_t id,
+    ABDNode(id_type id,
             unsigned level,
             std::size_t num_ratings,
             std::size_t num_users,
@@ -50,27 +50,27 @@ struct ABDNode{
                 num_ratings,
                 top_pop,
                 stats,
-                std::vector<id_t>{}){}
+                std::vector<id_type>{}){}
 
     ABDNode() : ABDNode(-1, -1, -1, -1, 0, stat_map_t{}){}
 
     void cache_scores(const double h_smooth);
 
-    std::vector<id_t> candidates() const{
+    std::vector<id_type> candidates() const{
         if(_top_pop > 0){ // Most Popular Sampling
             // sort items by popularity
-            std::vector<std::pair<id_t, int>> items_by_pop;
+            std::vector<std::pair<id_type, int>> items_by_pop;
             items_by_pop.reserve(_candidates->size());
             for(const auto &cand : *_candidates)
                 if (_stats->count(cand) > 0)
                     items_by_pop.emplace_back(cand, _stats->at(cand)._n);
             std::sort(items_by_pop.begin(),
                       items_by_pop.end(),
-                      [](const std::pair<id_t, int> &lhs, const std::pair<id_t, int> &rhs){
+                      [](const std::pair<id_type, int> &lhs, const std::pair<id_type, int> &rhs){
                 return lhs.second > rhs.second;
             });
             // then peek the first _top_pop ones
-            std::vector<id_t> cand;
+            std::vector<id_type> cand;
             cand.reserve(_top_pop);
             auto it_end = _top_pop < items_by_pop.size() ?
                         items_by_pop.cbegin() + _top_pop :
@@ -85,19 +85,19 @@ struct ABDNode{
 
     }
 
-    bool has_prediction(const id_t &item_id) const{
+    bool has_prediction(const id_type &item_id) const{
         if(_predictions == nullptr)
             throw std::runtime_error("Predictions have not been cached. Rebuild the tree with cache_enabled=true.");
         return _predictions->count(item_id) > 0;
     }
 
-    double prediction(const id_t &item_id) const{
+    double prediction(const id_type &item_id) const{
         if(_predictions == nullptr)
             throw std::runtime_error("Predictions have not been cached. Rebuild the tree with cache_enabled=true.");
         return _predictions->at(item_id);
     }
 
-    double score(const id_t &item_id) const{
+    double score(const id_type &item_id) const{
         if(_scores == nullptr)
             throw std::runtime_error("Scores have not been cached. Rebuild the tree with cache_enabled=true.");
         if(_scores->count(item_id) > 0)
@@ -152,8 +152,8 @@ struct ABDNode{
 
     const ABDNode *_parent;
     std::vector<std::unique_ptr<ABDNode>> _children;
-    id_t _id;
-    id_t _splitter_id;
+    id_type _id;
+    id_type _splitter_id;
     bool _is_unknown;
     bool _is_leaf;
     unsigned _level;
@@ -163,17 +163,17 @@ struct ABDNode{
     std::size_t _num_ratings;
     std::size_t _top_pop;
     std::unique_ptr<stat_map_t> _stats;
-    std::unique_ptr<std::map<id_t, double>> _predictions;
-    std::unique_ptr<std::map<id_t, double>> _scores;
-    std::unique_ptr<std::vector<id_t>> _candidates;
+    std::unique_ptr<std::map<id_type, double>> _predictions;
+    std::unique_ptr<std::map<id_type, double>> _scores;
+    std::unique_ptr<std::vector<id_type>> _candidates;
     std::unique_ptr<group_t> _users;
 
 
 };
 
 void ABDNode::cache_scores(const double h_smooth){
-    _predictions = std::unique_ptr<std::map<id_t, double> >(new std::map<id_t, double>{});
-    _scores = std::unique_ptr<std::map<id_t, double> >(new std::map<id_t, double>{});
+    _predictions = std::unique_ptr<std::map<id_type, double> >(new std::map<id_type, double>{});
+    _scores = std::unique_ptr<std::map<id_type, double> >(new std::map<id_type, double>{});
     if(_parent != nullptr){
         // user average prediction
         auto it_hint = _predictions->end();
@@ -214,14 +214,13 @@ void ABDNode::cache_scores(const double h_smooth){
 
 class ABDTree : public DTree<ABDNode>{
 protected:
-    using index_t = ABDIndex<typename ABDNode::id_t, ABDStats>;
+    using index_t = ABDIndex<id_type, ABDStats>;
     using bound_t = typename index_t::bound_t;
-    using bound_map_t = std::unordered_map<typename ABDNode::id_t, bound_t>;
+    using bound_map_t = hash_map_t<id_type, bound_t>;
     using stat_map_t = typename DTree<ABDNode>::stat_map_t;
 public:
     using typename DTree<ABDNode>::node_ptr_t;
     using typename DTree<ABDNode>::node_cptr_t;
-    using typename DTree<ABDNode>::id_t;
 public:
     ABDTree(const double bu_reg = 7,
             const double h_smooth = 100,
@@ -244,27 +243,27 @@ public:
     using DTree<ABDNode>::gdt_r;
 
     void build() override;
-    void build(const std::vector<id_t> &candidates);
+    void build(const std::vector<id_type> &candidates);
     void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data) override;
     void init(const std::vector<Rating> &training_data) override;
     node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const override;
 
     profile_t predict(const node_cptr_t node,
-                      const std::vector<id_t> &items) const override{
+                      const std::vector<id_type> &items) const override{
         profile_t pred;
-        pred.reserve(items.size());
+        pred.set_empty_key(-1);
         for(const auto &item_id : items){
             if(node->has_prediction(item_id))
-                pred.emplace(item_id, node->prediction(item_id));
+                pred.insert(std::make_pair(item_id, node->prediction(item_id)));
         }
         return pred;
     }
 
-    std::vector<id_t> ranking(const node_cptr_t node,
-                              const std::vector<id_t> &items) const override{
-        std::vector<id_t> rank(items);
+    std::vector<id_type> ranking(const node_cptr_t node,
+                              const std::vector<id_type> &items) const override{
+        std::vector<id_type> rank(items);
         std::sort(rank.begin(), rank.end(),
-                  [&](const id_t &lhs, const id_t &rhs){
+                  [&](const id_type &lhs, const id_type &rhs){
             return node->score(lhs) > node->score(rhs);
         });
         return rank;
@@ -284,13 +283,13 @@ protected:
                                        std::size_t start,
                                        const std::vector<group_t> &groups);
     void split(node_ptr_t parent,
-               const id_t splitter_id,
+               const id_type splitter_id,
                const double splitter_quality,
                std::vector<group_t> &groups,
                std::vector<double> &g_qualities,
                std::vector<stat_map_t> &g_stats) override;
     double split_quality(const node_cptr_t node,
-                         const id_t splitter_id,
+                         const id_type splitter_id,
                          std::vector<group_t> &groups,
                          std::vector<double> &g_qualities,
                          std::vector<stat_map_t> &g_stats) const override;
@@ -300,7 +299,7 @@ protected:
 protected:
     std::unique_ptr<index_t> _item_index;
     std::unique_ptr<index_t> _user_index;
-    std::unique_ptr<std::map<id_t, bound_map_t>> _node_bounds;
+    std::unique_ptr<hash_map_t<id_type, bound_map_t>> _node_bounds;
     double _bu_reg;
     double _h_smooth;
     std::size_t _top_pop;
@@ -370,22 +369,29 @@ void ABDTree::build(){
     build(_item_index->keys());
 }
 
-void ABDTree::build(const std::vector<id_t> &candidates){
+void ABDTree::build(const std::vector<id_type> &candidates){
     // compute the intersection between candidates and item_index keys
-    std::vector<id_t> candidates_sorted(candidates);
+    std::vector<id_type> candidates_sorted(candidates);
     std::sort(candidates_sorted.begin(), candidates_sorted.end());
-    std::vector<id_t> item_index_keys = _item_index->keys();
-    std::vector<id_t> intersection(std::min(item_index_keys.size(), candidates_sorted.size()));
+    std::vector<id_type> item_index_keys = _item_index->keys();
+    std::vector<id_type> intersection(std::min(item_index_keys.size(), candidates_sorted.size()));
     auto it = std::set_intersection(candidates_sorted.cbegin(), candidates_sorted.cend(),
                                     item_index_keys.cbegin(), item_index_keys.cend(),
                                     intersection.begin());
     intersection.resize(it - intersection.begin());
+
     // assign candidates to the root node
-    this->_root->_candidates = std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(intersection));
+    this->_root->_candidates = std::unique_ptr<std::vector<id_type>>(new std::vector<id_type>(intersection));
+
     // compute root node's bounds
-    _node_bounds = std::unique_ptr<std::map<id_t, bound_map_t>>(new std::map<id_t, bound_map_t>{});
-    for(const auto &entry : *_item_index)
-        _node_bounds->operator[](this->_root->_id).emplace(entry.first, typename index_t::bound_t(0, entry.second.size()));
+    _node_bounds = std::unique_ptr<hash_map_t<id_type, bound_map_t>>(new hash_map_t<id_type, bound_map_t>{});
+    _node_bounds->set_empty_key(-1);
+    for(const auto &entry : *_item_index){
+        if(_node_bounds->count(this->_root->_id) == 0)
+            (*_node_bounds)[this->_root->_id].set_empty_key(-1);
+        (*_node_bounds)[this->_root->_id].insert(std::make_pair(entry.first, typename index_t::bound_t(0, entry.second.size())));
+    }
+
     // cache root's scores
     if(_cache_enabled)  this->_root->cache_scores(_h_smooth);
     // generate the decision tree
@@ -403,7 +409,7 @@ void ABDTree::build(const std::vector<id_t> &candidates){
 }
 
 void ABDTree::split(node_ptr_t parent,
-                    const id_t splitter_id,
+                    const id_type splitter_id,
                     const double splitter_quality,
                     std::vector<group_t> &groups,
                     std::vector<double> &g_qualities,
@@ -420,7 +426,7 @@ void ABDTree::split(node_ptr_t parent,
         node_ptr_t child = new ABDNode;
         child->_parent = parent;
         child->_id = _node_counter++;
-        child->_candidates = std::unique_ptr<std::vector<id_t>>(new std::vector<id_t>(*parent->_candidates));
+        child->_candidates = std::unique_ptr<std::vector<id_type>>(new std::vector<id_type>(*parent->_candidates));
         child->_level = parent->_level + 1;
         child->_is_leaf = true;
         child->_num_ratings = 0u;
@@ -440,19 +446,21 @@ void ABDTree::split(node_ptr_t parent,
     }
     // compute children boundaries
     for(auto &entry : *_item_index){
-        const auto &item_bounds = _node_bounds->at(parent->_id).at(entry.first);
+        const auto &item_bounds = (*_node_bounds)[parent->_id][entry.first];
         auto it_left = entry.second.begin() + item_bounds._left;
         auto it_right = entry.second.begin() + item_bounds._right;
         const auto g_bounds = sort_by_group(it_left, it_right, item_bounds._left, groups);
         for(std::size_t gidx{}; gidx < g_bounds.size(); ++gidx){
-            _node_bounds->operator[](children[gidx]->_id)[entry.first] = g_bounds[gidx];
+            if(_node_bounds->count(children[gidx]->_id) == 0)
+                    (*_node_bounds)[children[gidx]->_id].set_empty_key(-1);
+            (*_node_bounds)[children[gidx]->_id][entry.first] = g_bounds[gidx];
             children[gidx]->_num_ratings += g_bounds[gidx].size();
         }
     }
 }
 
 double ABDTree::split_quality(const node_cptr_t node,
-                              const id_t splitter_id,
+                              const id_type splitter_id,
                               std::vector<group_t> &groups,
                               std::vector<double> &g_qualities,
                               std::vector<stat_map_t> &g_stats) const {
@@ -462,8 +470,8 @@ double ABDTree::split_quality(const node_cptr_t node,
     groups.assign(2, group_t{});
     g_stats.assign(2, stat_map_t());
 
-    auto it_left = _item_index->at(splitter_id).cbegin() + _node_bounds->at(node->_id).at(splitter_id)._left;
-    auto it_right = _item_index->at(splitter_id).cbegin() + _node_bounds->at(node->_id).at(splitter_id)._right;
+    auto it_left = _item_index->at(splitter_id).cbegin() + (*_node_bounds)[node->_id][splitter_id]._left;
+    auto it_right = _item_index->at(splitter_id).cbegin() + (*_node_bounds)[node->_id][splitter_id]._right;
 
     for(auto it_score = it_left; it_score < it_right; ++it_score){
         if(it_score->_rating >= 4){  // loved item
@@ -489,11 +497,12 @@ double ABDTree::split_quality(const node_cptr_t node,
 
 ABDTree::node_ptr_t ABDTree::traverse(const node_ptr_t node,
                                       const profile_t &answers) const {
+    auto &answers_non_const = const_cast<profile_t&>(answers);
     if(!node->_children.empty()){ // while not at leaf node
         if(answers.count(node->_splitter_id) == 0){// unknown item
             return node->_children.back().get();
         }else{
-            double rating = answers.at(node->_splitter_id);
+            double &rating = answers_non_const[node->_splitter_id];
             if(rating >= 4)
                 return node->_children[0].get(); // loved
             else
@@ -518,7 +527,7 @@ std::vector<ABDTree::bound_t> ABDTree::sort_by_group(It left,
     chunks.reserve(groups.size()+1);
     for(std::size_t gidx{0}; gidx < groups.size()+1; ++gidx){
         chunks.push_back(std::vector<typename It::value_type>{});
-        chunks.back().reserve(std::distance(left, right));  // reservef more memory than actually needed..
+        chunks.back().reserve(std::distance(left, right));  // reserve more memory than actually needed..
     }
     // initialize iterators for each group
     std::vector<group_t::const_iterator> it_groups;

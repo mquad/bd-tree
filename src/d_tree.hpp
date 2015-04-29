@@ -15,7 +15,6 @@ class DTree{
 public:
     using node_ptr_t = N*;
     using node_cptr_t = N const*;
-    using id_t = typename N::id_t;
     using stat_map_t = typename N::stat_map_t;
 
 public:
@@ -41,10 +40,10 @@ public:
     void gdt_r(node_ptr_t node);
 
     virtual profile_t predict(const node_cptr_t node,
-                              const std::vector<id_t> &items) const = 0;
+                              const std::vector<id_type> &items) const = 0;
 
-    virtual std::vector<id_t> ranking(const node_cptr_t node,
-                                      const std::vector<id_t> &items) const = 0;
+    virtual std::vector<id_type> ranking(const node_cptr_t node,
+                                      const std::vector<id_type> &items) const = 0;
 
     virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
 
@@ -58,19 +57,19 @@ protected:
     virtual void compute_root_quality() = 0;
 
     void find_splitter(const node_cptr_t node,
-                       id_t &splitter,
+                       id_type &splitter,
                        double &quality,
                        std::vector<group_t> &groups,
                        std::vector<double> &g_qualities,
                        std::vector<stat_map_t> &g_stats);
     virtual void split(node_ptr_t node,
-                       const id_t splitter_id,
+                       const id_type splitter_id,
                        const double splitter_quality,
                        std::vector<group_t> &groups,
                        std::vector<double> &g_qualities,
                        std::vector<stat_map_t> &g_stats) = 0;
     virtual double split_quality(const node_cptr_t node,
-                                 const id_t splitter_id,
+                                 const id_type splitter_id,
                                  std::vector<group_t> &groups,
                                  std::vector<double> &g_qualities,
                                  std::vector<stat_map_t> &g_stats) const = 0;
@@ -106,7 +105,7 @@ void DTree<N>::gdt_r(node_ptr_t node){
         return;
     }
 
-    id_t splitter{};
+    id_type splitter{};
     double quality{};
     std::vector<group_t> groups{};
     std::vector<double> g_qualities{};
@@ -138,7 +137,7 @@ void DTree<N>::gdt_r(node_ptr_t node){
 
 template<typename N>
 void DTree<N>::find_splitter(const node_cptr_t node,
-                             id_t &splitter,
+                             id_type &splitter,
                              double &quality,
                              std::vector<group_t> &groups,
                              std::vector<double> &g_qualities,
@@ -150,7 +149,7 @@ void DTree<N>::find_splitter(const node_cptr_t node,
         std::vector<std::vector<group_t>> cand_groups{_num_threads};
         std::vector<std::vector<double>> cand_g_qualities{_num_threads};
         std::vector<std::vector<stat_map_t>> cand_g_stats{_num_threads};
-        std::vector<std::pair<id_t, double>> cand_best_qualities{_num_threads, std::make_pair(id_t{},
+        std::vector<std::pair<id_type, double>> cand_best_qualities{_num_threads, std::make_pair(id_type{},
                                                                                               std::numeric_limits<double>::lowest())};
 
         // compute the qualiy of each candidate in parallel
@@ -196,7 +195,7 @@ void DTree<N>::find_splitter(const node_cptr_t node,
     }else{
         // pick a candidate with probability proportianal to his enhancement in quality
         //to reduce the memory footprint, we store just the candidate qualities, then recompute the groups just for the chosen one
-        std::vector<std::pair<id_t, double>> cand_qualities{candidates.size(), std::make_pair(id_t{},
+        std::vector<std::pair<id_type, double>> cand_qualities{candidates.size(), std::make_pair(id_type{},
                                                                                               std::numeric_limits<double>::lowest())};
 
         // compute the qualiy of each candidate in parallel

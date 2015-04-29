@@ -4,6 +4,7 @@
 #include <cmath>
 #include <map>
 #include <unordered_map>
+#include <google/dense_hash_map>
 #include <vector>
 
 constexpr bool almost_eq(double lhs, double rhs, double eps = 1e-12) {
@@ -25,6 +26,16 @@ std::vector<K> extract_keys(const std::unordered_map<K,V> &map){
     std::vector<K> keys;
     keys.reserve(map.size());
     std::for_each(map.cbegin(), map.cend(),[&](const std::pair<K,V> &entry){
+        keys.push_back(entry.first);
+    });
+    return keys;
+}
+
+template<typename K, typename V>
+std::vector<K> extract_keys(const google::dense_hash_map<K,V> &map){
+    std::vector<K> keys;
+    keys.reserve(map.size());
+    std::for_each(map.begin(), map.end(),[&](const std::pair<K,V> &entry){
         keys.push_back(entry.first);
     });
     return keys;
