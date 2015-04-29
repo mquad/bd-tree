@@ -158,7 +158,7 @@ void DTree<N>::find_splitter(const node_cptr_t node,
             std::vector<group_t> c_groups;
             std::vector<double> c_qualities;
             std::vector<stat_map_t> c_stats;
-    #pragma omp single
+    #pragma omp single nowait
             {
                 for(auto it_cand = candidates.cbegin(); it_cand != candidates.cend(); ++it_cand){
     #pragma omp task firstprivate(it_cand)
