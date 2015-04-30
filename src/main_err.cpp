@@ -2,7 +2,7 @@
 #include "stopwatch.hpp"
 #include "d_tree_eval.hpp"
 
-constexpr unsigned N = 5;
+constexpr unsigned N = 10;
 
 void print_usage_build(){
     std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl

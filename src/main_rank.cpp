@@ -3,7 +3,7 @@
 #include "stopwatch.hpp"
 #include "d_tree_eval.hpp"
 
-constexpr unsigned N = 5;
+constexpr unsigned N = 10;
 using PrecIndex = RankIndex<id_type, Precision<N>>;
 using APIndex = RankIndex<id_type, AveragePrecision<N>>;
 using NDCGIndex = RankIndex<id_type, NDCG<N>>;
