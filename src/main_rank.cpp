@@ -12,12 +12,12 @@ using HLUIndex = RankIndex<id_type, HLU<N>>;
 
 void print_usage_build(){
     std::cout << "BUILD ONLY (no prediction / evaluation):" << std::endl
-              << "Usage: ./bdtree_rank build <metric> <use_validation> <training-file> <validation-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff>" << std::endl;
+              << "Usage: ./bdtree_rank build <metric> <training-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff>" << std::endl;
 }
 
 void print_usage_eval(){
     std::cout << "PREDICTION / EVALUATION" << std::endl
-              << "Usage: ./bdtree_rank eval <metric> <use_validation> <training-file> <validation-file> <query-file> <test-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <outfile>" << std::endl;
+              << "Usage: ./bdtree_rank eval <metric> <training-file> <answer-file> <evaluation-file> <lambda> <h-smooth> <max-depth> <min-ratings> <top-pop> <threads> <randomize> <rand-coeff> <outfile>" << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -28,22 +28,20 @@ int main(int argc, char **argv)
     }
     std::string mode(argv[1]);
     if(mode == "build"){
-        if(argc < 13){
+        if(argc < 12){
             print_usage_build();
             return 1;
         }
         std::string metric(argv[2]);
-        bool use_cv = std::strtol(argv[3], nullptr, 10);
-        std::string training_file(argv[4]);
-        std::string validation_file(argv[5]);
-        double lambda = std::strtod(argv[5], nullptr);
-        double h_smoothing = std::strtod(argv[6], nullptr);
-        unsigned max_depth = std::strtoul(argv[7], nullptr, 10);
-        std::size_t min_ratings = std::strtoull(argv[8], nullptr, 10);
-        std::size_t top_pop = std::strtoull(argv[9], nullptr, 10);
-        unsigned num_threads = std::strtoul(argv[10], nullptr, 10);
-        bool randomize = std::strtol(argv[11], nullptr, 10);
-        double rand_coeff = std::strtod(argv[12], nullptr);
+        std::string training_file(argv[3]);
+        double lambda = std::strtod(argv[4], nullptr);
+        double h_smoothing = std::strtod(argv[5], nullptr);
+        unsigned max_depth = std::strtoul(argv[6], nullptr, 10);
+        std::size_t min_ratings = std::strtoull(argv[7], nullptr, 10);
+        std::size_t top_pop = std::strtoull(argv[8], nullptr, 10);
+        unsigned num_threads = std::strtoul(argv[9], nullptr, 10);
+        bool randomize = std::strtol(argv[10], nullptr, 10);
+        double rand_coeff = std::strtod(argv[11], nullptr);
 
         stopwatch sw;
         sw.reset();
@@ -67,10 +65,7 @@ int main(int argc, char **argv)
             std::cerr << "Unknown metric. Valid values are: prec, ap, ndcg, hlu." << std::endl;
         }
 
-        if(use_cv)
-            bdtree->init(Rating::read_from(training_file), Rating::read_from(validation_file));
-        else
-            bdtree->init(Rating::read_from(training_file));
+        bdtree->init(Rating::read_from(training_file));
         auto init_t = sw.elapsed_ms();
         std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
         bdtree->build();
@@ -80,25 +75,23 @@ int main(int argc, char **argv)
 
         return 0;
     }else if (mode == "eval"){
-        if(argc < 17){
+        if(argc < 15){
             print_usage_eval();
             return 1;
         }
         std::string metric(argv[2]);
-        bool use_cv = std::strtol(argv[3], nullptr, 10);
-        std::string training_file(argv[4]);
-        std::string validation_file(argv[5]);
-        std::string query_file(argv[6]);
-        std::string test_file(argv[7]);
-        double lambda = std::strtod(argv[8], nullptr);
-        double h_smoothing = std::strtod(argv[9], nullptr);
-        unsigned max_depth = std::strtoul(argv[10], nullptr, 10);
-        std::size_t min_ratings = std::strtoull(argv[11], nullptr, 10);
-        std::size_t top_pop = std::strtoull(argv[12], nullptr, 10);
-        unsigned num_threads = std::strtoul(argv[13], nullptr, 10);
-        bool randomize = std::strtol(argv[14], nullptr, 10);
-        double rand_coeff = std::strtod(argv[15], nullptr);
-        std::string outfile(argv[16]);
+        std::string training_file(argv[3]);
+        std::string query_file(argv[4]);
+        std::string test_file(argv[5]);
+        double lambda = std::strtod(argv[6], nullptr);
+        double h_smoothing = std::strtod(argv[7], nullptr);
+        unsigned max_depth = std::strtoul(argv[8], nullptr, 10);
+        std::size_t min_ratings = std::strtoull(argv[9], nullptr, 10);
+        std::size_t top_pop = std::strtoull(argv[10], nullptr, 10);
+        unsigned num_threads = std::strtoul(argv[11], nullptr, 10);
+        bool randomize = std::strtol(argv[12], nullptr, 10);
+        double rand_coeff = std::strtod(argv[13], nullptr);
+        std::string outfile(argv[14]);
 
         std::ofstream ofs(outfile);
 
@@ -124,10 +117,7 @@ int main(int argc, char **argv)
             std::cerr << "Unknown metric. Valid values are: prec, ap, ndcg, hlu." << std::endl;
         }
 
-        if(use_cv)
-            bdtree->init(Rating::read_from(training_file), Rating::read_from(validation_file));
-        else
-            bdtree->init(Rating::read_from(training_file));
+        bdtree->init(Rating::read_from(training_file));
         auto init_t = sw.elapsed_ms();
         std::cout << "Tree initialized in " << init_t / 1000.0 << " s." << std::endl ;
         bdtree->build();
@@ -137,6 +127,10 @@ int main(int argc, char **argv)
         build_profiles(query_file, query_profiles);
         build_profiles(test_file, test_profiles);
         // evaluate tree quality
+        std::cout << "EVALUATION:" << std::endl
+                  << "Num. test users: " << test_profiles.size() << std::endl;
+        auto added = added_ratings<decltype(*bdtree)>(*bdtree, query_profiles, test_profiles);
+        ofs << "ADDED=["; print_range(ofs, added.cbegin(), added.cend()) << "]" << std::endl;
         auto rmse = evaluate_error<decltype(*bdtree), RMSE<>>(*bdtree, query_profiles, test_profiles);
         ofs << "RMSE=["; print_range(ofs, rmse.cbegin(), rmse.cend()) << "]" << std::endl;
         auto p = evaluate_ranking<decltype(*bdtree), Precision<N>>(*bdtree, query_profiles, test_profiles);

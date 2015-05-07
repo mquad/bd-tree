@@ -100,7 +100,6 @@ public:
         this->_root->_users->reserve(_user_index->size());
         for(const auto &entry : *_user_index)
             this->_root->_users->push_back(entry.first);
-
     }
 
     void init(const std::vector<Rating> &training_data) override{
