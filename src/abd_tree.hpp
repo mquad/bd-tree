@@ -246,7 +246,7 @@ public:
     void build(const std::vector<id_type> &candidates);
     void init(const std::vector<Rating> &training_data, const std::vector<Rating> &validation_data) override;
     void init(const std::vector<Rating> &training_data) override;
-    node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const override;
+    bool traverse(node_ptr_t &node, const profile_t &answers) const override;
 
     profile_t predict(const node_cptr_t node,
                       const std::vector<id_type> &items) const override{
@@ -495,22 +495,25 @@ double ABDTree::split_quality(const node_cptr_t node,
 
 }
 
-ABDTree::node_ptr_t ABDTree::traverse(const node_ptr_t node,
-                                      const profile_t &answers) const {
+bool ABDTree::traverse(node_ptr_t &node,
+                       const profile_t &answers) const {
     auto &answers_non_const = const_cast<profile_t&>(answers);
-    if(!node->_children.empty()){ // while not at leaf node
+    bool to_unknown = false;
+    if(!node->is_leaf()){ // while not at leaf node
         if(answers.count(node->_splitter_id) == 0){// unknown item
-            return node->_children.back().get();
+            node = node->_children.back().get();
+            to_unknown = true;
         }else{
             double &rating = answers_non_const[node->_splitter_id];
             if(rating >= 4)
-                return node->_children[0].get(); // loved
+                node = node->_children[0].get(); // loved
             else
-                return node->_children[1].get(); // hated
+                node = node->_children[1].get(); // hated
         }
     }else{
-        return nullptr;
+        node = nullptr;
     }
+    return !to_unknown;
 }
 
 // takes a range of a container of (id, rating) values

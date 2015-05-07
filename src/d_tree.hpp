@@ -45,7 +45,9 @@ public:
     virtual std::vector<id_type> ranking(const node_cptr_t node,
                                       const std::vector<id_type> &items) const = 0;
 
-    virtual node_ptr_t traverse(const node_ptr_t node, const profile_t &answers) const = 0;
+    // move the node pointer to the next node of the tree according to user's answers
+    // return true if a rating is added by the strategy (i.e., the unknown branch is NOT taken)
+    virtual bool traverse(node_ptr_t &node, const profile_t &answers) const = 0;
 
     virtual void release_temp() = 0;
 
