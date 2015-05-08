@@ -80,25 +80,25 @@ int main(int argc, char **argv)
         bdtree.build();
         std::cout << "Tree built in " << (sw.elapsed_ms() - init_t) / 1000.0 << " s." << std::endl ;
 
-        user_profiles_t query_profiles, test_profiles;
-        build_profiles(ans_file, query_profiles);
-        build_profiles(eval_file, test_profiles);
+        user_profiles_t answer_profiles, eval_profiles;
+        build_profiles(ans_file, answer_profiles);
+        build_profiles(eval_file, eval_profiles);
         std::ofstream ofs(outfile);
         // evaluate tree quality
         std::cout << "EVALUATION:" << std::endl
-                  << "Num. test users: " << test_profiles.size() << std::endl;
+                  << "Num. test users: " << eval_profiles.size() << std::endl;
 
-        auto added = added_ratings<decltype(bdtree)>(bdtree, query_profiles, test_profiles);
+        auto added = added_ratings<decltype(bdtree)>(bdtree, answer_profiles, eval_profiles);
         ofs << "ADDED=["; print_range(ofs, added.cbegin(), added.cend()) << "]" << std::endl;
-        auto rmse = evaluate_error<decltype(bdtree), RMSE<>>(bdtree, query_profiles, test_profiles);
+        auto rmse = evaluate_rmse<decltype(bdtree)>(bdtree, answer_profiles, eval_profiles);
         ofs << "RMSE=["; print_range(ofs, rmse.cbegin(), rmse.cend()) << "]" << std::endl;
-        auto p = evaluate_ranking<decltype(bdtree), Precision<N>>(bdtree, query_profiles, test_profiles);
+        auto p = evaluate_ranking<decltype(bdtree), Precision<N>>(bdtree, answer_profiles, eval_profiles);
         ofs << "Precision_at_" << N << "=["; print_range(ofs, p.cbegin(), p.cend()) << "]" << std::endl;
-        auto map = evaluate_ranking<decltype(bdtree), AveragePrecision<N>>(bdtree, query_profiles, test_profiles);
+        auto map = evaluate_ranking<decltype(bdtree), AveragePrecision<N>>(bdtree, answer_profiles, eval_profiles);
         ofs << "MAP_at_" << N << "=["; print_range(ofs, map.cbegin(), map.cend()) << "]" << std::endl;
-        auto ndcg = evaluate_ranking<decltype(bdtree), NDCG<N>>(bdtree, query_profiles, test_profiles);
+        auto ndcg = evaluate_ranking<decltype(bdtree), NDCG<N>>(bdtree, answer_profiles, eval_profiles);
         ofs << "NDCG_at_" << N << "=["; print_range(ofs, ndcg.cbegin(), ndcg.cend()) << "]" << std::endl;
-        auto hlu = evaluate_ranking<decltype(bdtree), HLU<N,5>>(bdtree, query_profiles, test_profiles);
+        auto hlu = evaluate_ranking<decltype(bdtree), HLU<N,5>>(bdtree, answer_profiles, eval_profiles);
         ofs << "HLU_at_" << N << "=["; print_range(ofs, hlu.cbegin(), hlu.cend()) << "]" << std::endl;
         std::cout << "Process completed in " << sw.elapsed_ms() / 1000.0  << " s." << std::endl;
         return 0;

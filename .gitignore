@@ -1,8 +1,10 @@
 *~
 *.user
+*.out
 build/
 release/
 debug/
-data/
+data*/
 dist/
+results*/
 *.egg-info

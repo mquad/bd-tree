@@ -15,8 +15,8 @@
 
 
 template<typename Key = id_type>
-struct RMSE{
-    static double eval(profile_t &predicted, profile_t &actual){
+struct SqErr{
+    static std::pair<double, int> eval(profile_t &predicted, profile_t &actual){
         double sq_err{.0};
         int n{0};
         for(const auto &act : actual){
@@ -25,10 +25,7 @@ struct RMSE{
                 ++n;
             }
         }
-        if(n > 0)
-            return std::sqrt(sq_err / n);
-        else
-            return -1;
+        return std::make_pair(sq_err, n);
     }
 };
 

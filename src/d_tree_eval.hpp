@@ -34,11 +34,11 @@ double build_profiles(const std::string &filename, user_profiles_t &profiles){
 template<typename T>
 std::vector<double> added_ratings(const T &dtree,
                                    user_profiles_t &answers,
-                                   user_profiles_t &test){
+                                   user_profiles_t &eval){
     std::vector<double> metric_avg(dtree.depth_max(), .0);
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
-        if(test.count(ans.first) > 0){
+        if(eval.count(ans.first) > 0){
             unsigned level{0u};
             auto node = dtree.root();
             while(!node->is_leaf()){
@@ -59,24 +59,22 @@ std::vector<double> added_ratings(const T &dtree,
     return metric_avg;
 }
 
-template<typename T, typename Metric>
-std::vector<double> evaluate_error(const T &dtree,
+template<typename T>
+std::vector<double> evaluate_rmse(const T &dtree,
                                      user_profiles_t &answers,
-                                     user_profiles_t &test){
+                                     user_profiles_t &eval){
     std::vector<double> metric_avg(dtree.depth_max(), .0);
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
-        if(test.count(ans.first) > 0){
-            auto test_ids = extract_keys(test.at(ans.first));
+        if(eval.count(ans.first) > 0){
+            auto test_ids = extract_keys(eval.at(ans.first));
             unsigned level{0u};
             auto node = dtree.root();
             while(node != nullptr){
                 profile_t predicted = dtree.predict(node, test_ids);
-                double metric = Metric::eval(predicted, test.at(ans.first));
-                if(metric != -1){
-                    metric_avg[level] += metric;
-                    ++counts[level];
-                }
+                std::pair<double, int> result = SqErr<>::eval(predicted, eval.at(ans.first));
+                metric_avg[level] += result.first;
+                counts[level] += result.second;
                 dtree.traverse(node, ans.second);
                 ++level;
             }
@@ -84,7 +82,7 @@ std::vector<double> evaluate_error(const T &dtree,
     }
     std::transform(metric_avg.begin(), metric_avg.end(),
                    counts.begin(), metric_avg.begin(),
-                   [](const double &sum, const int &count){return count > 0 ? sum / count : -1;});
+                   [](const double &sum, const int &count){return count > 0 ? std::sqrt(sum / count) : -1;});
     // remove trailing elements
     auto it = metric_avg.begin();
     while(it != metric_avg.end() && *it != -1) ++it;
@@ -95,16 +93,16 @@ std::vector<double> evaluate_error(const T &dtree,
 template<typename T, typename Metric, int RelTh = 4>
 std::vector<double> evaluate_ranking(const T &dtree,
                                      user_profiles_t &answers,
-                                     user_profiles_t &test){
+                                     user_profiles_t &eval){
     std::vector<double> metric_avg(dtree.depth_max(), .0);
     std::vector<int> counts(dtree.depth_max(), 0);
     for(const auto &ans : answers){
-        if(test.count(ans.first) > 0){
-            auto test_ids = extract_keys(test.at(ans.first));
+        if(eval.count(ans.first) > 0){
+            auto test_ids = extract_keys(eval.at(ans.first));
             unsigned level{0u};
             auto node = dtree.root();
             while(node != nullptr){
-                metric_avg[level] += Metric::eval(dtree.ranking(node, test_ids), test.at(ans.first));
+                metric_avg[level] += Metric::eval(dtree.ranking(node, test_ids), eval.at(ans.first));
                 ++counts[level];
                 dtree.traverse(node, ans.second);
                 ++level;

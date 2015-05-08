@@ -131,7 +131,7 @@ int main(int argc, char **argv)
                   << "Num. test users: " << test_profiles.size() << std::endl;
         auto added = added_ratings<decltype(*bdtree)>(*bdtree, query_profiles, test_profiles);
         ofs << "ADDED=["; print_range(ofs, added.cbegin(), added.cend()) << "]" << std::endl;
-        auto rmse = evaluate_error<decltype(*bdtree), RMSE<>>(*bdtree, query_profiles, test_profiles);
+        auto rmse = evaluate_rmse<decltype(*bdtree)>(*bdtree, query_profiles, test_profiles);
         ofs << "RMSE=["; print_range(ofs, rmse.cbegin(), rmse.cend()) << "]" << std::endl;
         auto p = evaluate_ranking<decltype(*bdtree), Precision<N>>(*bdtree, query_profiles, test_profiles);
         ofs << "Precision_at_" << N << "=["; print_range(ofs, p.cbegin(), p.cend()) << "]" << std::endl;

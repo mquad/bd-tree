@@ -51,6 +51,8 @@ bool is_ordered(It begin, It end){
 
 template<typename It>
 std::ostream& print_range(std::ostream &os, It begin, It end, const std::string delim = ", "){
+    if(std::distance(begin, end) == 0)
+        return os;
     for(auto it = begin; it != end-1; ++it)
         os << *it << delim;
     os << *(end-1);
