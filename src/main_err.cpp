@@ -84,10 +84,10 @@ int main(int argc, char **argv)
         build_profiles(ans_file, answer_profiles);
         build_profiles(eval_file, eval_profiles);
         std::ofstream ofs(outfile);
+
         // evaluate tree quality
         std::cout << "EVALUATION:" << std::endl
                   << "Num. test users: " << eval_profiles.size() << std::endl;
-
         auto added = added_ratings<decltype(bdtree)>(bdtree, answer_profiles, eval_profiles);
         ofs << "ADDED=["; print_range(ofs, added.cbegin(), added.cend()) << "]" << std::endl;
         auto rmse = evaluate_rmse<decltype(bdtree)>(bdtree, answer_profiles, eval_profiles);

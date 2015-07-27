@@ -18,10 +18,10 @@ include_directories(${Boost_INCLUDE_DIR})
 
 
 #configure the compiler
-set (CMAKE_CXX_COMPILER "g++")
+set (CMAKE_CXX_COMPILER "g++-5")
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -pedantic -fopenmp")
 set (CMAKE_CXX_FLAGS_DEBUG "-Ofast -g")
-set (CMAKE_CXX_FLAGS_RELEASE "-Ofast -march=native -DNDEBUG")
+set (CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG")
 
 #add subdirectories
 add_subdirectory(src)       #application sources

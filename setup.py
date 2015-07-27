@@ -6,10 +6,10 @@ from setuptools import setup, Extension
 import os
 import sys
 
-compiler_args=['-std=c++11','-fopenmp','-O3','-march=native','-DNDEBUG',]
+compiler_args=['-std=c++11','-fopenmp','-O3','-DNDEBUG',]
 
-os.environ["CC"] = "g++"
-os.environ["CXX"] = "g++"
+os.environ["CC"] = "g++-5"
+os.environ["CXX"] = "g++-5"
 
 setup(name='dtree',
       version='1.1.0',

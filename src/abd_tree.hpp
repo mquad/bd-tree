@@ -115,11 +115,11 @@ struct ABDNode{
     }
 
     bool has_hated() const{
-        return !_children.size() < 2;
+        return !(_children.size() < 2);
     }
 
     bool has_unknown() const{
-        return !_children.size() < 3;
+        return !(_children.size() < 3);
     }
 
     ABDNode* traverse_loved() const{
@@ -566,7 +566,6 @@ std::vector<ABDTree::bound_t> ABDTree::sort_by_group(It left,
     return bounds;
 }
 
-
 void ABDTree::unknown_stats(const node_cptr_t node,
                             std::vector<stat_map_t> &group_stats) const{
     group_stats.push_back(ABDNode::stat_map_t());
@@ -595,6 +594,22 @@ void ABDTree::unknown_stats(const node_cptr_t node,
         if(unknown_stats._n > 0)
             it_hint = group_stats.back().emplace_hint(it_hint, item, unknown_stats);
     }
+#ifdef DEBUG
+    for(const auto &entry : node->_stats){
+        assert(entry.second._sum ==
+               group_stats[0].at(entry.first)._sum +
+               group_stats[1].at(entry.first)._sum +
+               group_stats[0].at(entry.first)._sum);
+        assert(entry.second._sum2 ==
+               group_stats[0].at(entry.first)._sum2 +
+               group_stats[1].at(entry.first)._sum2 +
+               group_stats[0].at(entry.first)._sum2);
+        assert(entry.second._n ==
+               group_stats[0].at(entry.first)._n +
+               group_stats[1].at(entry.first)._n +
+               group_stats[0].at(entry.first)._n);
+    }
+#endif
 }
 
 
