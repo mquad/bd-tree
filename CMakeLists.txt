@@ -18,7 +18,12 @@ include_directories(${Boost_INCLUDE_DIR})
 
 
 #configure the compiler
-set (CMAKE_CXX_COMPILER "g++-5")
+if(APPLE)
+    set (CMAKE_CXX_COMPILER "g++-5")
+else()
+    set (CMAKE_CXX_COMPILER "g++")
+endif()
+
 set (CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -pedantic -fopenmp")
 set (CMAKE_CXX_FLAGS_DEBUG "-Ofast -g")
 set (CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG")
