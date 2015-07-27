@@ -4,6 +4,7 @@
 #include "abd_tree.hpp"
 #include "rank_tree.hpp"
 #include "metrics.hpp"
+#include "types.hpp"
 #include <boost/python.hpp>
 
 namespace py = boost::python;
@@ -40,7 +41,7 @@ public:
     }
 
     void build_py(const py::list &candidates, const bool release_temp){
-        std::vector<std::size_t> candidates_vec;
+        std::vector<id_type> candidates_vec;
         long int size{py::len(candidates)};
         candidates_vec.reserve(size);
         for(long int t{0}; t < size; ++t){
@@ -112,11 +113,10 @@ void expose_tree_methods(py::class_<C, X1> c) {
 template<typename T>
 class TraverserPy{
     using node_t = typename T::node_cptr_t;
-    using id_t = typename T::id_t;
     node_t _current_node;
 public:
     TraverserPy(const T &tree) : _current_node{tree.root()} {}
-    id_t current_query() const{
+    id_type current_query() const{
         return _current_node->_splitter_id;
     }
     bool at_leaf() const{
