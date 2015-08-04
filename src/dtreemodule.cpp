@@ -10,8 +10,8 @@
 namespace py = boost::python;
 
 constexpr int N = 10;
-using NDCGIndex = RankIndex<std::size_t, NDCG<N>>;
-
+using NDCGIndex = RankIndex<id_type, NDCG<N>>;
+ 
 class ErrorTreePy : public ABDTree{
 public:
     ErrorTreePy(const double bu_reg = 7,
@@ -32,12 +32,18 @@ public:
         for(long int t{0u}; t < size; ++t){
             py::tuple rating = py::extract<py::tuple>(training[t]);
             training_data.push_back(Rating(
-                                        py::extract<std::size_t>(rating[0]),
-                                        py::extract<std::size_t>(rating[1]),
+                                        py::extract<id_type>(rating[0]),
+                                        py::extract<id_type>(rating[1]),
                                         py::extract<double>(rating[2])
                                         ));
         }
         this->init(training_data);
+    }
+
+    void build_py(const py::list &candidates, const bool release_temp){
+        this->build();
+        if(release_temp)
+            this->release_temp();
     }
 
     void build_py(const py::list &candidates, const bool release_temp){
@@ -78,8 +84,8 @@ public:
         for(long int t{0u}; t < size; ++t){
             py::tuple rating = py::extract<py::tuple>(training[t]);
             training_data.push_back(Rating(
-                                        py::extract<std::size_t>(rating[0]),
-                                        py::extract<std::size_t>(rating[1]),
+                                        py::extract<id_type>(rating[0]),
+                                        py::extract<id_type>(rating[1]),
                                         py::extract<double>(rating[2])
                                         ));
         }
@@ -87,7 +93,14 @@ public:
     }
 
     void build_py(const py::list &candidates, const bool release_temp){
-        std::vector<std::size_t> candidates_vec;
+        this->build();
+        if(release_temp)
+            this->release_temp();
+    }
+
+
+    void build_py(const py::list &candidates, const bool release_temp){
+        std::vector<id_type> candidates_vec;
         long int size{py::len(candidates)};
         candidates_vec.reserve(size);
         for(long int t{0}; t < size; ++t){
@@ -156,9 +169,9 @@ void expose_Traverser(const std::string &classname){
 BOOST_PYTHON_MODULE(dtreelib)
 {
   expose_tree_methods(py::class_<ErrorTreePy, boost::noncopyable>("ErrorTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
-//  expose_tree_methods(py::class_<RankTreePy<NDCGIndex>, boost::noncopyable>("RankNDCGTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
+  expose_tree_methods(py::class_<RankTreePy<NDCGIndex>, boost::noncopyable>("RankNDCGTreePy", py::init<double, double, unsigned, std::size_t, std::size_t, unsigned, bool, double, bool>()));
   expose_Traverser<ErrorTreePy>("ErrorTreeTraverserPy");
-//  expose_Traverser<RankTreePy<NDCGIndex>>("RankNDCGTreeTraverserPy");
+  expose_Traverser<RankTreePy<NDCGIndex>>("RankNDCGTreeTraverserPy");
 }
 
 
