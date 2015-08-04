@@ -7,10 +7,10 @@ import os
 import sys
 import platform
 
-compiler_args=['-std=c++11','-fopenmp','-O3','-DNDEBUG',]
+compiler_args=['-std=c++11','-fopenmp','-O3','-DNDEBUG']
 
-os.environ["CC"] = "g++-5" if platform.system() == "Darwin" else "g++"
-os.environ["CXX"] = "g++-5" if platform.system() == "Darwin" else "g++"
+os.environ["CC"] = "g++-4.9" if platform.system() == "Darwin" else "g++"
+os.environ["CXX"] = "g++-4.9" if platform.system() == "Darwin" else "g++"
 
 setup(name='dtree',
       version='1.1.0',
