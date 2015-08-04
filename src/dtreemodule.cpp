@@ -119,7 +119,7 @@ public:
 template<typename C, typename X1>
 void expose_tree_methods(py::class_<C, X1> c) {
   void (C::*build_1)(const bool)    =   &C::build_py;
-  void (C::*build_2)(const py::list, const bool)    =   &C::build_py;
+  void (C::*build_2)(const py::list&, const bool)    =   &C::build_py;
   c.def("init", &C::init_py)
           .def("build", build_1)
           .def("build", build_2)
